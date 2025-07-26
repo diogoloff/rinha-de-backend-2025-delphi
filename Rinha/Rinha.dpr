@@ -7,12 +7,10 @@ uses
   IdHTTPWebBrokerBridge,
   Web.WebReq,
   Web.WebBroker,
-
   {$IFDEF LINUX64}
   WiRL.Console.Posix.Daemon,
   WiRL.Console.Posix.Syslog,
-  {$ENDIF}
-
+  {$ENDIF }
   unsmPagamentos in 'Fontes\unsmPagamentos.pas' {smPagamentos: TDSServerModule},
   undmServer in 'Fontes\undmServer.pas' {dmServer: TDataModule},
   undmModuloWeb in 'Fontes\undmModuloWeb.pas' {dmModuloWeb: TWebModule},
@@ -25,8 +23,10 @@ uses
 
 var
     LServer : TIdHTTPWebBrokerBridge;
-    FTipoServico : TTypeService;
 
+    {$IFDEF LINUX64}
+        FTipoServico : TTypeService;
+    {$ENDIF}
 begin
     {$IFDEF DEBUG}
         ReportMemoryLeaksOnShutdown := True;

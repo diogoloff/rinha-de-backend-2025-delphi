@@ -233,7 +233,9 @@ procedure RunDSServer(const AServer: TIdHTTPWebBrokerBridge);
         end;
     end;
 begin
-    FServerIniciado := False;
+    {$IFDEF SERVICO}
+        FServerIniciado := False;
+    {$ENDIF}
 
     {$IFNDEF LINUX64}
         FPathAplicacao := ExtractFilePath(ParamStr(0));
