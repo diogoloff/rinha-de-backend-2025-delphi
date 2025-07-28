@@ -10,6 +10,7 @@ services:
       - FIREBIRD_PASSWORD=masterkey
       - FIREBIRD_DATABASE=banco.fdb
       - FIREBIRD_DATABASE_DEFAULT_CHARSET=UTF8
+      - FIREBIRD_CONF_DataTypeCompatibility=3.0
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
