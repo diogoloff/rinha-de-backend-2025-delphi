@@ -1,4 +1,4 @@
-program Rinha;
+Ôªøprogram Rinha;
 {$APPTYPE CONSOLE}
 
 uses
@@ -34,19 +34,21 @@ begin
 
     DefaultSystemCodePage := 65001;
 
-    if (Trim(UpperCase(Copy(ParamStr(1), 1, 6))) <> '-PATH:') then
-    begin
-        writeln('N„o foi o par‚metro de passagem -PATH! Informe como primeiro par‚metro -PATH:CAMINHO FISICO DA APLICACAO');
-        Exit;
-    end;
+    {$IFDEF SERVICO}
+        if (Trim(UpperCase(Copy(ParamStr(1), 1, 6))) <> '-PATH:') then
+        begin
+            writeln('N√£o foi o par√¢metro de passagem -PATH! Informe como primeiro par√¢metro -PATH:CAMINHO FISICO DA APLICACAO');
+            Exit;
+        end;
 
-    FPathAplicacao := (Trim(Copy(ParamStr(1), 7, length(ParamStr(1)) - 6)));
+        FPathAplicacao := (Trim(Copy(ParamStr(1), 7, length(ParamStr(1)) - 6)));
 
-    if (trim(FPathAplicacao) = '') then
-    begin
-        writeln('N„o foi informado o path da aplicaÁ„o como parametro de passagem -PATH!');
-        Exit;
-    end;
+        if (trim(FPathAplicacao) = '') then
+        begin
+            writeln('N√£o foi informado o path da aplica√ß√£o como parametro de passagem -PATH!');
+            Exit;
+        end;
+    {$ENDIF}
 
     try
         if WebRequestHandler <> nil then
@@ -130,9 +132,9 @@ begin
                 writeln('##############################################');
 
                 {$IFDEF LINUX64}
-                    writeln('Rinha iniciado como aplicaÁ„o, caso deseje iniciar como serviÁo informe como segundo par‚metro -DAEMON!');
+                    writeln('Rinha iniciado como aplica√ß√£o, caso deseje iniciar como servi√ßo informe como segundo par√¢metro -DAEMON!');
                 {$ELSE}
-                    writeln('Rinha iniciado como aplicaÁ„o!');
+                    writeln('Rinha iniciado como aplica√ß√£o!');
                 {$ENDIF}
 
                 writeln('##############################################');

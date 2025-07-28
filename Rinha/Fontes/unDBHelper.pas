@@ -3,68 +3,73 @@ unit unDBHelper;
 interface
 
 uses
-  System.SysUtils,
+  System.SysUtils, System.Classes,
   FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
   FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef, FireDAC.Stan.Pool,
   FireDAC.Stan.Option, Data.DB, undmServer;
 
 function CriarConexaoFirebird: TFDConnection;
-procedure DestruirConexaoFirebird(var conn: TFDConnection);
+function ParametrosBanco: TStringList;
+procedure DestruirConexaoFirebird(var lCon: TFDConnection);
 
 implementation
 
 function CriarConexaoFirebird: TFDConnection;
 var
-    conn: TFDConnection;
+    lCon: TFDConnection;
 begin
-    conn := nil;
+    lCon := nil;
     try
-        conn := TFDConnection.Create(nil);
-        conn.DriverName := 'FB';
-        conn.ConnectionDefName := 'RINHA';
+        lCon := TFDConnection.Create(nil);
+        lCon.DriverName := 'FB';
+        lCon.ConnectionDefName := 'RINHA';
+        lCon.LoginPrompt := False;
+        lCon.TxOptions.AutoStop := False;
+        lCon.TxOptions.DisconnectAction := xdRollback;
+        lCon.UpdateOptions.UpdateMode := upWhereKeyOnly;
+        lCon.UpdateOptions.LockMode := lmPessimistic;
+        lCon.ResourceOptions.KeepConnection := False;
 
-        with conn.Params do
-        begin
-            Add('Pooled=True');
-            Add('POOL_MaximumItems=50');
-            Add('Database=C:\Projetos\Rinha\BD\BDRINHA.FDB');
-            Add('User_Name=SYSDBA');
-            Add('Password=masterkey');
-            Add('DriverID=FB');
-            Add('Protocol=TCPIP');
-            Add('Server=localhost');
-            Add('Port=3050');
-            Add('SQLDialect=3');
-            Add('CharacterSet=UTF8');
-        end;
-
-        conn.LoginPrompt := False;
-        conn.TxOptions.AutoStop := False;
-        conn.TxOptions.DisconnectAction := xdRollback;
-        conn.UpdateOptions.UpdateMode := upWhereKeyOnly;
-        conn.UpdateOptions.LockMode := lmPessimistic;
-        conn.ResourceOptions.KeepConnection := False;
-
-        conn.Connected := True;
-        Result := conn;
+        lCon.Connected := True;
+        Result := lCon;
     except
         on E: Exception do
         begin
-            if Assigned(conn) then
-                conn.Free;
+            if Assigned(lCon) then
+                lCon.Free;
 
             raise Exception.Create('Erro ao conectar ao banco: ' + E.Message);
         end;
     end;
 end;
 
-procedure DestruirConexaoFirebird(var conn: TFDConnection);
+function ParametrosBanco: TStringList;
 begin
-    if Assigned(conn) then
+    Result := TStringList.Create;
+
+    with Result do
+    begin
+        Add('Pooled=True');
+        Add('POOL_MaximumItems=50');
+        Add('Database=/var/lib/firebird/data/banco.fdb');
+        Add('User_Name=SYSDBA');
+        Add('Password=masterkey');
+        Add('DriverID=FB');
+        Add('Protocol=TCPIP');
+        Add('Server=192.168.0.4');
+        Add('Port=3051');
+        Add('SQLDialect=3');
+        Add('CharacterSet=UTF8');
+    end;
+end;
+
+procedure DestruirConexaoFirebird(var lCon: TFDConnection);
+begin
+    if Assigned(lCon) then
     begin
         try
-            if conn.Connected then
-                conn.Connected := False;
+            if lCon.Connected then
+                lCon.Connected := False;
         except
             on E: Exception do
             begin
@@ -72,8 +77,8 @@ begin
             end;
         end;
 
-        conn.Free;
-        conn := nil;
+        lCon.Free;
+        lCon := nil;
     end;
 end;
 

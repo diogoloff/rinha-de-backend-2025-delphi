@@ -7,7 +7,7 @@ uses System.SysUtils, System.Classes, System.Json, System.DateUtils, System.Regu
     FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
     FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef,
     FireDAC.Stan.Option, Data.DB, IdHTTP, undmServer, FireDAC.Stan.Intf, FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf,
-  FireDAC.DApt.Intf, FireDAC.Comp.DataSet;
+    FireDAC.DApt.Intf, FireDAC.Comp.DataSet;
 
 type
   TsmPagamentos = class(TDSServerModule)
@@ -27,37 +27,40 @@ implementation
 
 {$R *.dfm}
 
-uses unErroHelper, unHealthHelper, unDBHelper;
+uses unErroHelper, unHealthHelper, unDBHelper, unConstantes;
 
 function TsmPagamentos.EnviarParaProcessar(const correlationId: string; const amount: Double; const requestedAt: string; const default: Boolean): Boolean;
 var
-    HTTP: TIdHTTP;
-    JSONToSend: TJSONObject;
-    ResponseStr: string;
+    lHTTP: TIdHTTP;
+    ljEnviar: TJSONObject;
+    lsResposta: string;
     lsURL : String;
+    lStream: TStringStream;
 begin
     Result := False;
 
-    lsURL := 'http://payment-processor-default:8080/payments';
+    lsURL := cURL + '/payments';
     if (not default) then
-        lsURL := 'http://payment-processor-fallback:8080/payments';
+        lsURL := cURLFall + '/payments';
 
-    HTTP := TIdHTTP.Create(nil);
-    JSONToSend := TJSONObject.Create;
+    lHTTP := TIdHTTP.Create(nil);
+    ljEnviar := TJSONObject.Create;
     try
         try
             // Monta o corpo JSON
-            JSONToSend.AddPair('correlationId', correlationId);
-            JSONToSend.AddPair('amount', TJSONNumber.Create(amount));
-            JSONToSend.AddPair('requestedAt', requestedAt);
+            ljEnviar.AddPair('correlationId', correlationId);
+            ljEnviar.AddPair('amount', TJSONNumber.Create(amount));
+            ljEnviar.AddPair('requestedAt', requestedAt);
 
-            HTTP.Request.ContentType := 'application/json';
+            lStream := TStringStream.Create(ljEnviar.ToString, TEncoding.UTF8);
+
+            lHTTP.Request.ContentType := 'application/json';
 
             // Envia a requisição POST
-            ResponseStr :=
-                HTTP.Post(
+            lsResposta :=
+                lHTTP.Post(
                     lsURL,
-                    TStringStream.Create(JSONToSend.ToString, TEncoding.UTF8)
+                    lStream
                 );
 
             // Se chegou aqui sem exceção, assume sucesso
@@ -70,30 +73,35 @@ begin
             end;
         end;
     finally
-        JSONToSend.Free;
-        HTTP.Free;
+        ljEnviar.Free;
+        lHTTP.Free;
+
+        if Assigned(lStream) then
+            lStream.Free;
     end;
 end;
 
 function TsmPagamentos.EnviarPagamento([JSONParam] const JSON: string): String;
 var
-    jsonObj: TJSONObject;
+    ljObj: TJSONObject;
+    lCon: TFDConnection;
+    ldDataCriacao: TDateTime;
+    lbResultado: boolean;
+
     correlationId: string;
     amount: Double;
     requestedAt: string;
-    status, processor: string;
-    resultado: boolean;
-    conn: TFDConnection;
-    datacriacao: TDateTime;
+    status: string;
+    processor: string;
 begin
     try
         // Tenta converter o JSON para objeto
-        jsonObj := TJSONObject.ParseJSONValue(JSON) as TJSONObject;
-        if not Assigned(jsonObj) then
+        ljObj := TJSONObject.ParseJSONValue(JSON) as TJSONObject;
+        if not Assigned(ljObj) then
             Exit(ErroJson('JSON inválido.'));
 
         // Extrai o campo correlationId
-        if not jsonObj.TryGetValue('correlationId', correlationId) then
+        if not ljObj.TryGetValue('correlationId', correlationId) then
             Exit(ErroJson('Campo "correlationId" ausente.'));
 
         // Verifica se é um UUID válido
@@ -101,44 +109,45 @@ begin
             Exit(ErroJson('Formato de "correlationId" inválido.'));
 
         // Extrai o campo amount
-        if not jsonObj.TryGetValue('amount', amount) then
+        if not ljObj.TryGetValue('amount', amount) then
             Exit(ErroJson('Campo "amount" ausente.'));
 
         if amount <= 0 then
             Exit(ErroJson('Campo "amount" deve ser maior que zero.'));
     finally
-        jsonObj.Free;
+        ljObj.Free;
     end;
 
-    datacriacao := Now;
-    requestedAt := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss"Z"', TTimeZone.Local.ToUniversalTime(datacriacao));
+    ldDataCriacao := Now;
+    requestedAt := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss"Z"', TTimeZone.Local.ToUniversalTime(ldDataCriacao));
 
     // simulação da lógica de comunicação com os Processors
-    processor := 'default';
+    processor := 'na';
     status := 'error';
-    resultado := False;
-    if CheckDefaultHealth then
-        resultado := EnviarParaProcessar(correlationId, amount, requestedAt, True);
+    lbResultado := False;
 
-    if (resultado) then
-        status := 'success'
-    else
+    if (CheckHealth = 0) then
+    begin
+        processor := 'default';
+        lbResultado := EnviarParaProcessar(correlationId, amount, requestedAt, True);
+    end
+    else if (CheckHealth = 1) then
     begin
         processor := 'fallback';
-        resultado := EnviarParaProcessar(correlationId, amount, requestedAt, True);
-
-        if (resultado) then
-            status := 'success';
+        lbResultado := EnviarParaProcessar(correlationId, amount, requestedAt, True);
     end;
 
-    conn := CriarConexaoFirebird;
-    QyInserePagamento.Connection := conn;
+    if (lbResultado) then
+        status := 'success';
+
+    lCon := CriarConexaoFirebird;
+    QyInserePagamento.Connection := lCon;
     try
         try
-            if (conn.InTransaction) then
-                conn.Rollback;
+            if (lCon.InTransaction) then
+                lCon.Rollback;
 
-            conn.StartTransaction;
+            lCon.StartTransaction;
 
             with QyInserePagamento do
             begin
@@ -147,23 +156,23 @@ begin
                 Params.ParamByName('amount').AsFloat := amount;
                 Params.ParamByName('status').AsString := status;
                 Params.ParamByName('processor').AsString := processor;
-                Params.ParamByName('created_at').AsDateTime := datacriacao;
+                Params.ParamByName('created_at').AsDateTime := ldDataCriacao;
                 ExecSQL;
             end;
 
-            conn.Commit;
+            lCon.Commit;
         except
             on E : Exception do
             begin
-                conn.Rollback;
+                lCon.Rollback;
                 Exit(ErroInterno('Não foi possivel gravar o registro do pagamento'));
             end;
         end;
     finally
-        DestruirConexaoFirebird(conn);
+        DestruirConexaoFirebird(lCon);
     end;
 
-    if (not resultado) then
+    if (not lbResultado) then
         Exit(ErroInterno('Não foi possivel processar o pagamento'));
 
     Result := '{"status":"' + status + '","message":"Pagamento processado"}'
