@@ -3,71 +3,107 @@ unit unHealthHelper;
 interface
 
 uses
-  System.SysUtils, IdHTTP, System.DateUtils, System.Json;
+  System.SysUtils, IdHTTP, System.DateUtils, System.Json, System.SyncObjs,
+  unConstantes, undmServer;
 
-  function CheckDefaultHealth: Boolean;
+  function CheckHealth: Integer;
 
 var
-    UltimoPingDefault: TDateTime = 0;
-    UltimoStatusDefault: Boolean = True;
+    FCSHealth: TCriticalSection;
+    FUltimoPingDefault: TDateTime = 0;
+    FUltimoRetorno: Integer = 0;
 
 implementation
 
-function CheckDefaultHealth: Boolean;
+function AmbienteAtivo(const URL: string; out AmbienteOk: Boolean; out MinRT: Integer): Boolean;
 var
-    HTTP: TIdHTTP;
-    ResponseStr: String;
-    ResponseJSON: TJSONObject;
-    FailingValue: Boolean;
+    lHTTP: TIdHTTP;
+    lsResposta: string;
+    ljResposta: TJSONObject;
+    lbFailing: Boolean;
 begin
-    // Usa o último status se ainda estiver dentro do intervalo de 5 segundos
-    if SecondsBetween(Now, UltimoPingDefault) < 5 then
-        Exit(UltimoStatusDefault);
+    Result := False;
+    MinRT := MaxInt;
+    AmbienteOk := False;
 
-    // Atualiza o timestamp do último ping
-    UltimoPingDefault := Now;
-
-    HTTP := TIdHTTP.Create(nil);
+    lHTTP := TIdHTTP.Create(nil);
     try
         try
-            // Faz requisição ao endpoint de saúde do Processor Default
-            ResponseStr := HTTP.Get('http://payment-processor-default:8080/payments/service-health');
-
-            // Se não lançar exceção, está saudável
-            ResponseJSON := TJSONObject.ParseJSONValue(ResponseStr) as TJSONObject;
-            if Assigned(ResponseJSON) then
+            lsResposta := lHTTP.Get(URL + '/payments/service-health');
+            ljResposta := TJSONObject.ParseJSONValue(lsResposta) as TJSONObject;
+            if Assigned(ljResposta) then
             begin
-                if ResponseJSON.TryGetValue('failing', FailingValue) then
-                    UltimoStatusDefault := not FailingValue
-                else
-                    UltimoStatusDefault := False;
+                if ljResposta.TryGetValue('failing', lbFailing) then
+                    AmbienteOk := not lbFailing;
 
-                // Não vi utilização para o segundo parametro
-                // var MinResponseTime: Integer;
-                // if ResponseJSON.TryGetValue('minResponseTime', MinResponseTime) then
-                //   // usar de alguma forma
+                ljResposta.TryGetValue('minResponseTime', MinRT);
 
-                ResponseJSON.Free;
-            end
-            else
-                UltimoStatusDefault := False;
-        except
-            // Em caso de erro, assume que está fora do ar
-            on E: EIdHTTPProtocolException do
-            begin
-                // Se for erro 429, não atualiza o status, só respeita o cooldown
-                if E.ErrorCode <> 429 then
-                    UltimoStatusDefault := False;
+                ljResposta.Free;
+                Result := True;
             end;
-
-            on E: Exception do
-                UltimoStatusDefault := False;
+        except
+          on E: Exception do
+          begin
+              GerarLog('Erro ao verificar ambiente: ' + URL + ' - ' + E.Message, True);
+          end;
         end;
     finally
-        HTTP.Free;
+        lHTTP.Free;
+    end;
+end;
+
+function CheckHealth: Integer;
+var
+    lbDefaultAtivo : Boolean;
+    lbFallbackAtivo : Boolean;
+    liRTDefault : Integer;
+    liRTFallback : Integer;
+    ldUltPingTemp : TDateTime;
+    liRetornoTemp : Integer;
+begin
+    FCSHealth.Enter;
+    try
+        if SecondsBetween(Now, FUltimoPingDefault) < 5 then
+            Exit(FUltimoRetorno);
+
+        ldUltPingTemp := Now;
+    finally
+        FCSHealth.Leave;
     end;
 
-    Result := UltimoStatusDefault;
+    liRetornoTemp := -1;
+    AmbienteAtivo(cURL, lbDefaultAtivo, liRTDefault);
+
+    if (lbDefaultAtivo) then
+        liRetornoTemp := 0;
+
+    if (not lbDefaultAtivo) or (liRTDefault > 150) then
+    begin
+        AmbienteAtivo(cURL, lbFallbackAtivo, liRTFallback);
+
+        if (lbFallbackAtivo) then
+        begin
+            liRetornoTemp := 1;
+            if (lbDefaultAtivo) and (liRTFallback > liRTDefault) then
+                liRetornoTemp := 0;
+        end;
+    end;
+
+    FCSHealth.Enter;
+    try
+        FUltimoRetorno := liRetornoTemp;
+        FUltimoPingDefault := ldUltPingTemp;
+    finally
+        FCSHealth.Leave;
+    end;
+
+    Result := liRetornoTemp;
 end;
+
+initialization
+  FCSHealth := TCriticalSection.Create;
+
+finalization
+  FCSHealth.Free;
 
 end.

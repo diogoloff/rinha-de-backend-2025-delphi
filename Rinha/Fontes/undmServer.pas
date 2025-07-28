@@ -53,7 +53,7 @@ implementation
 {$R *.dfm}
 
 uses
-    unsmPagamentos, unConstantes;
+    unsmPagamentos, unConstantes, unDBHelper;
 
 function DSServer: TDSServer;
 begin
@@ -72,23 +72,8 @@ var
 begin
     FDManager.Active := False;
 
-    oParams := TStringList.Create;
+    oParams := ParametrosBanco;
     try
-        with oParams do
-        begin
-            Add('Pooled=True');
-            Add('POOL_MaximumItems=50');
-            Add('Database=C:\Projetos\Rinha\BD\BDRINHA.FDB');
-            Add('User_Name=SYSDBA');
-            Add('Password=masterkey');
-            Add('DriverID=FB');
-            Add('Protocol=TCPIP');
-            Add('Server=localhost');
-            Add('Port=3050');
-            Add('SQLDialect=3');
-            Add('CharacterSet=UTF8');
-        end;
-
         if (not FDManager.IsConnectionDef('RINHA')) then
             FDManager.AddConnectionDef('RINHA', 'FB', oParams)
         else
