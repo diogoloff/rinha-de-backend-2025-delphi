@@ -51,13 +51,13 @@ begin
     begin
         Add('Pooled=True');
         Add('POOL_MaximumItems=50');
-        Add('Database=/var/lib/firebird/data/banco.fdb');
-        Add('User_Name=SYSDBA');
-        Add('Password=masterkey');
+        Add('Database=/var/lib/firebird/data/' + FDBName);
+        Add('User_Name=' + FDBUser);
+        Add('Password=' + FDBPass);
         Add('DriverID=FB');
         Add('Protocol=TCPIP');
-        Add('Server=192.168.0.4');
-        Add('Port=3051');
+        Add('Server=' + FDBHost);
+        Add('Port=' + FDBPort);
         Add('SQLDialect=3');
         Add('CharacterSet=UTF8');
     end;

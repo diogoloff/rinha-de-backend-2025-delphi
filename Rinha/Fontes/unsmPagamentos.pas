@@ -39,9 +39,9 @@ var
 begin
     Result := False;
 
-    lsURL := cURL + '/payments';
+    lsURL := FUrl + '/payments';
     if (not default) then
-        lsURL := cURLFall + '/payments';
+        lsURL := FUrlFall + '/payments';
 
     lHTTP := TIdHTTP.Create(nil);
     ljEnviar := TJSONObject.Create;

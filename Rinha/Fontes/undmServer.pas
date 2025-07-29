@@ -30,12 +30,21 @@ function DSServer: TDSServer;
 procedure TerminateThreads;
 procedure RunDSServer(const AServer: TIdHTTPWebBrokerBridge);
 procedure StopServer(const AServer: TIdHTTPWebBrokerBridge);
+function GetEnvURL(const EnvVar, DefaultURL: string): string;
 procedure GerarLog(lsMsg : String; lbForcaArquivo : Boolean = False; lbQuebraLinhaConsole : Boolean = True);
 
 var
+    FUrl: String;
+    FUrlFall: String;
+    FDBName: String;
+    FDBUser: String;
+    FDBPass: String;
+    FDBHost: String;
+    FDBPort: String;
+
     FModule: TComponent;
     FDSServer: TDSServer;
-    FPathAplicacao : String;
+    FPathAplicacao: String;
 
     {$IFDEF SERVICO}
         FServerIniciado: Boolean;
@@ -181,6 +190,13 @@ begin
     GerarLog(sPort + AServer.DefaultPort.ToString);
     GerarLog(sSessionID + AServer.SessionIDCookieName);
     GerarLog(cArrow);
+end;
+
+function GetEnvURL(const EnvVar, DefaultURL: string): string;
+begin
+    Result := GetEnvironmentVariable(EnvVar);
+    if Result = '' then
+        Result := DefaultURL;
 end;
 
 procedure RunDSServer(const AServer: TIdHTTPWebBrokerBridge);

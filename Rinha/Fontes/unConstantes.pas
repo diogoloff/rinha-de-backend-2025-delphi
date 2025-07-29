@@ -29,8 +29,6 @@ const
     cCommandStatus = 'status';
     cCommandHelp = 'help';
     cCommandExit = 'exit';
-    cURL = 'http://192.168.0.4:8001';  //http://payment-processor-default:8080
-    cURLFall = 'http://192.168.0.4:8002';  //http://payment-processor-fallback:8080
 
 implementation
 
