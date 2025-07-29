@@ -72,14 +72,14 @@ begin
     end;
 
     liRetornoTemp := -1;
-    AmbienteAtivo(cURL, lbDefaultAtivo, liRTDefault);
+    AmbienteAtivo(FUrl, lbDefaultAtivo, liRTDefault);
 
     if (lbDefaultAtivo) then
         liRetornoTemp := 0;
 
     if (not lbDefaultAtivo) or (liRTDefault > 150) then
     begin
-        AmbienteAtivo(cURL, lbFallbackAtivo, liRTFallback);
+        AmbienteAtivo(FUrlFall, lbFallbackAtivo, liRTFallback);
 
         if (lbFallbackAtivo) then
         begin
