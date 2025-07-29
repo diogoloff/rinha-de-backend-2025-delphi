@@ -36,12 +36,6 @@ procedure GerarLog(lsMsg : String; lbForcaArquivo : Boolean = False; lbQuebraLin
 var
     FUrl: String;
     FUrlFall: String;
-    FDBName: String;
-    FDBUser: String;
-    FDBPass: String;
-    FDBHost: String;
-    FDBPort: String;
-
     FModule: TComponent;
     FDSServer: TDSServer;
     FPathAplicacao: String;
@@ -236,6 +230,9 @@ procedure RunDSServer(const AServer: TIdHTTPWebBrokerBridge);
 begin
     {$IFDEF SERVICO}
         FServerIniciado := False;
+
+        FUrl := GetEnvURL('DEFAULT_URL', 'http://localhost:8001');
+        FUrlFall := GetEnvURL('FALLBACK_URL', 'http://localhost:8002');
     {$ENDIF}
 
     {$IFNDEF LINUX64}

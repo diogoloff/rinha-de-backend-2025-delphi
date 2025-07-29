@@ -35,22 +35,6 @@ begin
     DefaultSystemCodePage := 65001;
 
     {$IFDEF SERVICO}
-        FUrl := GetEnvURL('DEFAULT_URL', 'http://localhost:8001');
-        FUrlFall := GetEnvURL('FALLBACK_URL', 'http://localhost:8002');
-        FDBName := GetEnvURL('DB_NAME', 'banco.fdb');
-        FDBUser := GetEnvURL('DB_USER', 'SYSDBA');
-        FDBPass := GetEnvURL('DB_PASS', 'masterkey');
-        FDBHost := GetEnvURL('DB_HOST', 'localhost');
-        FDBPort := GetEnvURL('DB_PORT', '3050');
-
-        GerarLog(FUrl, True);
-        GerarLog(FUrlFall, True);
-        GerarLog(FDBName, True);
-        GerarLog(FDBUser, True);
-        GerarLog(FDBPass, True);
-        GerarLog(FDBHost, True);
-        GerarLog(FDBPort, True);
-
         if (Trim(UpperCase(Copy(ParamStr(1), 1, 6))) <> '-PATH:') then
         begin
             writeln('Não foi o parâmetro de passagem -PATH! Informe como primeiro parâmetro -PATH:CAMINHO FISICO DA APLICACAO');

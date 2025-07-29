@@ -51,13 +51,13 @@ begin
     begin
         Add('Pooled=True');
         Add('POOL_MaximumItems=50');
-        Add('Database=/var/lib/firebird/data/' + FDBName);
-        Add('User_Name=' + FDBUser);
-        Add('Password=' + FDBPass);
+        Add('Database=/var/lib/firebird/data/' + GetEnvURL('DB_NAME', 'banco.fdb'));
+        Add('User_Name=' + GetEnvURL('DB_USER', 'SYSDBA'));
+        Add('Password=' + GetEnvURL('DB_PASS', 'masterkey'));
         Add('DriverID=FB');
         Add('Protocol=TCPIP');
-        Add('Server=' + FDBHost);
-        Add('Port=' + FDBPort);
+        Add('Server=' + GetEnvURL('DB_HOST', 'localhost'));
+        Add('Port=' + GetEnvURL('DB_PORT', '3050'));
         Add('SQLDialect=3');
         Add('CharacterSet=UTF8');
     end;
