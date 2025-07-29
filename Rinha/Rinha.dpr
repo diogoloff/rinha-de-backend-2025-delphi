@@ -57,7 +57,7 @@ begin
         LServer := TIdHTTPWebBrokerBridge.Create(nil);
 
         try
-            LServer.DefaultPort := 9999;
+            LServer.DefaultPort := 8080;
 
             if FindCmdLineSwitch('DAEMON', ['-'], true) then
             begin
