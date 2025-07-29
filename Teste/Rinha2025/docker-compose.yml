@@ -1,7 +1,54 @@
 services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: rinha-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api1
+      - api2
+    ports:
+      - "9999:9999"
+    networks:
+      - backend-rinha
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: "10MB"
+
+  api1: &api
+    image: diogoloff/rinha2025-minimo:latest
+    hostname: api1
+    environment:
+      - DEFAULT_URL=http://payment-processor-default:8080
+      - FALLBACK_URL=http://payment-processor-fallback:8080
+      - DB_NAME=banco.fdb
+      - DB_USER=SYSDBA
+      - DB_PASS=masterkey
+      - DB_HOST=firebird
+      - DB_PORT=3050
+      - INSTANCE_ID=API-1
+    entrypoint: /sbin/my_init
+    networks:
+      - backend-rinha
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.45"
+          memory: "90MB"
+
+  api2:
+    <<: *api
+    hostname: api2
+    environment:
+      - INSTANCE_ID=API-2
+
   firebird:
     image: firebirdsql/firebird
-    restart: always
+    container_name: rinha-firebird
     ports:
       - "3051:3050"
     environment:
@@ -15,24 +62,11 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - backend-rinha
-
-  rinha2025:
-    image: diogoloff/rinha2025:latest
-    restart: always
-    ports:
-      - "9999:9999"
-    environment:
-      - DEFAULT_URL=http://payment-processor-default:8080
-      - FALLBACK_URL=http://payment-processor-fallback:8080
-      - DB_NAME=banco.fdb
-      - DB_USER=SYSDBA
-      - DB_PASS=masterkey
-      - DB_HOST=firebird
-      - DB_PORT=3050
-    entrypoint: /sbin/my_init
-    networks:
-      - backend-rinha
-      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: "160MB"
 
 networks:
   backend-rinha:

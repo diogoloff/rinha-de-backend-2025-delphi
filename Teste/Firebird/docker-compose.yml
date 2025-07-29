@@ -3,7 +3,7 @@ services:
     image: firebirdsql/firebird
     restart: always
     ports:
-      - "3051:3050"
+      - "3050:3050"
     environment:
       - FIREBIRD_ROOT_PASSWORD=masterkey
       - FIREBIRD_USER=SYSDBA
