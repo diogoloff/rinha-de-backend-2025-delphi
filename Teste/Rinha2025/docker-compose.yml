@@ -1,0 +1,42 @@
+services:
+  firebird:
+    image: firebirdsql/firebird
+    restart: always
+    ports:
+      - "3051:3050"
+    environment:
+      - FIREBIRD_ROOT_PASSWORD=masterkey
+      - FIREBIRD_USER=SYSDBA
+      - FIREBIRD_PASSWORD=masterkey
+      - FIREBIRD_DATABASE=banco.fdb
+      - FIREBIRD_DATABASE_DEFAULT_CHARSET=UTF8
+      - FIREBIRD_CONF_DataTypeCompatibility=3.0
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - backend-rinha
+
+  rinha2025:
+    image: diogoloff/rinha2025:latest
+    restart: always
+    ports:
+      - "9999:9999"
+    environment:
+      - DEFAULT_URL=http://payment-processor-default:8080
+      - FALLBACK_URL=http://payment-processor-fallback:8080
+      - DB_NAME=banco.fdb
+      - DB_USER=SYSDBA
+      - DB_PASS=masterkey
+      - DB_HOST=firebird
+      - DB_PORT=3050
+    entrypoint: /sbin/my_init
+    networks:
+      - backend-rinha
+      - payment-processor
+
+networks:
+  backend-rinha:
+    name: backend-rinha
+    driver: bridge
+  payment-processor:
+    external: true
