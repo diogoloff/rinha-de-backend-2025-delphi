@@ -31,6 +31,7 @@ const
     cCommandExit = 'exit';
     cTempoMinimoResposta = 30;
     cTempoMinimoTimeOut = 200;
+    cDebug = False;
 
 implementation
 

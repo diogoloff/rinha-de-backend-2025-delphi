@@ -2,7 +2,8 @@
 
 interface
 
-uses System.SysUtils, System.Classes, System.Json, System.DateUtils, System.RegularExpressions,
+uses System.SysUtils, System.Classes, System.Json, System.DateUtils,
+    System.RegularExpressions, System.SyncObjs,
     DataSnap.DSProviderDataModuleAdapter, Datasnap.DSServer, Datasnap.DSAuth, REST.HttpClient,
     FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
     FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef,
@@ -31,40 +32,18 @@ uses unErroHelper, unDBHelper, unConstantes;
 function TsmPagamentos.EnviarPagamento(const JSON: string): String;
 var
     ljObj: TJSONObject;
-    lCon: TFDConnection;
     ldDataCriacao: TDateTime;
-    lbResultado: boolean;
-    liHealth: Integer;
-    lbContinua: Boolean;
 
     correlationId: string;
     amount: Double;
     requestedAt: string;
-    status: string;
-    processor: string;
 begin
     ljObj := nil;
     try
         try
-            // Tenta converter o JSON para objeto
             ljObj := TJSONObject.ParseJSONValue(JSON) as TJSONObject;
-            if not Assigned(ljObj) then
-                Exit(ErroJson('JSON inválido.'));
-
-            // Extrai o campo correlationId
-            if not ljObj.TryGetValue('correlationId', correlationId) then
-                Exit(ErroJson('Campo "correlationId" ausente.'));
-
-            // Verifica se é um UUID válido
-            if not TRegEx.IsMatch(correlationId, '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') then
-                Exit(ErroJson('Formato de "correlationId" inválido.'));
-
-            // Extrai o campo amount
-            if not ljObj.TryGetValue('amount', amount) then
-                Exit(ErroJson('Campo "amount" ausente.'));
-
-            if amount <= 0 then
-                Exit(ErroJson('Campo "amount" deve ser maior que zero.'));
+            correlationId := ljObj.GetValue('correlationId').Value;
+            amount := StrToFloat(ljObj.GetValue('amount').Value);
         except
             on E : Exception do
             begin
@@ -94,7 +73,9 @@ begin
         end;
     end;
 
-    Result := '{"success":{"code":200}}';
+    Result := '{}';
+
+    //Result := '{"success":{"code":200}}';
 
     // simulação da lógica de comunicação com os Processors
     {processor := 'na';

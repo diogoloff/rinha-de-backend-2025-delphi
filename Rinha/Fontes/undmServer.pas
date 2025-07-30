@@ -118,8 +118,8 @@ begin
     FDefaultAtivo := True;
     FTempoMinimoRespota := cTempoMinimoResposta;
 
-    IdHTTP.ConnectTimeout := cTempoMinimoTimeOut;
-    IdHTTP.ReadTimeout := 100;
+    IdHTTP.ConnectTimeout := 2000;
+    IdHTTP.ReadTimeout := 1000;
     IdHTTP.Request.ContentType := 'application/json';
 
     TThread.CreateAnonymousThread(
@@ -143,8 +143,8 @@ begin
                     ljResposta := TJSONObject.ParseJSONValue(lsResposta) as TJSONObject;
                     if Assigned(ljResposta) then
                     begin
-                       ljResposta.TryGetValue('failing', lbFailing);
-                       ljResposta.TryGetValue('minResponseTime', liMinResponseTime);
+                        lbFailing := ljResposta.GetValue('failing').Value = 'true';
+                        liMinResponseTime := StrToInt(ljResposta.GetValue('minResponseTime').Value);
 
                        GerarLog('Servico Default failing: ' + BoolToStr(lbFailing) + ' - minResponseTime: ' + IntToStr(liMinResponseTime), True);
 
@@ -235,26 +235,18 @@ begin
             end;
         end;
 
-        function DefaultAtivo: Boolean;
-        begin
-            FMonitorLock.Enter;
-            try
-
-                Result := FDefaultAtivo;
-            finally
-                FMonitorLock.Leave;
-            end;
-        end;
-
         procedure ProcessarFila;
         var
             lFilaPendente: TList<TRequisicaoPendente>;
             lFilaReenvio: TList<TRequisicaoPendente>;
             lRequisicao: TRequisicaoPendente;
             lbResultado: Boolean;
+            lbDefaultAtivo: Boolean;
+            liTentativa: Integer;
         begin
             lFilaPendente := TList<TRequisicaoPendente>.Create;
             lFilaReenvio := TList<TRequisicaoPendente>.Create;
+            lbDefaultAtivo := FDefaultAtivo;
 
             try
                 // Esvazia a fila de requisições global para uma fila pendentes
@@ -276,6 +268,49 @@ begin
                     FFilaLock.Leave;
                 end;
 
+                // Processar pendentes
+                {if (lFilaPendente.Count > 0) then
+                begin
+                    liTentativa := 0;
+                    try
+                        for lRequisicao in lFilaPendente do
+                        begin
+                            lbResultado := False;
+                            if (liTentativa < 3) then
+                                lbResultado := EnviarParaProcessar(lRequisicao.correlationId, lRequisicao.amount, lRequisicao.requestedAt, lbDefaultAtivo);
+
+                            if (lbResultado) then
+                            begin
+                                // Adicionar para gravar
+                            end
+                            else
+                            begin
+                                inc(liTentativa);
+                                FFilaReEnvio.Add(lRequisicao);
+
+                                FMonitorLock.Enter;
+                                try
+                                    if (lbDefaultAtivo <> FDefaultAtivo) then
+                                    begin
+                                        liTentativa := 0;
+                                        lbDefaultAtivo := FDefaultAtivo;
+                                    end;
+                                finally
+                                    FMonitorLock.Leave;
+                                end;
+                            end;
+                        end;
+                    except
+                        on E : Exception do
+                        begin
+                            GerarLog('Processar Fila Normal: ' + E.Message, True);
+                        end;
+                    end;
+
+                    if (liTentativa >= 3) then
+                        Exit;
+                end;
+
                 // Esvaiza a fila de reenvio global para reenvio local
                 if (FFilaReEnvio.Count > 0) then
                 begin
@@ -290,53 +325,47 @@ begin
                     end;
                 end;
 
-                // Processar pendentes
-                try
-                    for lRequisicao in lFilaPendente do
-                    begin
-                        lbResultado := EnviarParaProcessar(lRequisicao.correlationId, lRequisicao.amount, lRequisicao.requestedAt, FDefaultAtivo);
-
-                        if (lbResultado) then
-                        begin
-                            // Adicionar para gravar
-                        end
-                        else
-                        begin
-                            FFilaReEnvio.Add(lRequisicao);
-                            Sleep(500);
-                        end;
-                    end;
-                except
-                    on E : Exception do
-                    begin
-                        GerarLog('Processar Fila Normal: ' + E.Message, True);
-                    end;
-                end;
-
                 // Processar renvios
-                try
-                    for lRequisicao in lFilaReenvio do
-                    begin
-                        lbResultado := EnviarParaProcessar(lRequisicao.correlationId, lRequisicao.amount, lRequisicao.requestedAt, FDefaultAtivo);
+                if (lFilaReenvio.Count > 0) then
+                begin
+                    liTentativa := 0;
+                    try
+                        for lRequisicao in lFilaReenvio do
+                        begin
+                            lbResultado := False;
+                            if (liTentativa < 3) then
+                                lbResultado := EnviarParaProcessar(lRequisicao.correlationId, lRequisicao.amount, lRequisicao.requestedAt, lbDefaultAtivo);
 
-                        if (lbResultado) then
+                            if (lbResultado) then
+                            begin
+                                // Adicionar para gravar
+                                // Aqui no reenvio em caso de falha poderiam existir outras lógicas como numero de tentativas
+                                // forçar um estorno, etc em caso de um cenário real.
+                            end
+                            else
+                            begin
+                                inc(liTentativa);
+                                FFilaReEnvio.Add(lRequisicao);
+
+                                FMonitorLock.Enter;
+                                try
+                                    if (lbDefaultAtivo <> FDefaultAtivo) then
+                                    begin
+                                        liTentativa := 0;
+                                        lbDefaultAtivo := FDefaultAtivo;
+                                    end;
+                                finally
+                                    FMonitorLock.Leave;
+                                end;
+                            end;
+                        end;
+                    except
+                        on E : Exception do
                         begin
-                            // Adicionar para gravar
-                            // Aqui no reenvio em caso de falha poderiam existir outras lógicas como numero de tentativas
-                            // forçar um estorno, etc em caso de um cenário real.
-                        end
-                        else
-                        begin
-                            FFilaReEnvio.Add(lRequisicao);
-                            Sleep(500);
+                            GerarLog('Processar Fila Reenvio: ' + E.Message, True);
                         end;
                     end;
-                except
-                    on E : Exception do
-                    begin
-                        GerarLog('Processar Fila Reenvio: ' + E.Message, True);
-                    end;
-                end;
+                end;   }
             finally
                 lFilaPendente.Free;
                 lFilaReenvio.Free;
@@ -349,13 +378,13 @@ begin
 
         while FProcessamentoAtivo do
         begin
-            if MilliSecondsBetween(Now, ltUltimoProcessamento) >= 500 then
+            if MilliSecondsBetween(Now, ltUltimoProcessamento) >= 100 then
             begin
                 ltUltimoProcessamento := Now;
                 ProcessarFila;
             end
             else
-                Sleep(100); // pequena pausa para não consumir CPU
+                Sleep(100); // pequena pausa para não consumir CPU       }
         end;
     end).Start;
 end;
@@ -547,6 +576,9 @@ var
     lsArquivo : String;
     lsData : String;
 begin
+    if (not cDebug) then
+        Exit;
+
     {$IFNDEF SERVICO}
         if (lbQuebraLinhaConsole) then
             Writeln(lsMsg)
