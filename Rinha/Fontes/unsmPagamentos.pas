@@ -12,7 +12,6 @@ uses System.SysUtils, System.Classes, System.Json, System.DateUtils, System.Regu
 type
   TsmPagamentos = class(TDSServerModule)
     QyInserePagamento: TFDQuery;
-    IdHTTP: TIdHTTP;
   private
     { Private declarations }
   public
