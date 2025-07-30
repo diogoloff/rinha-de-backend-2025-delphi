@@ -1,8 +1,26 @@
 services:
-  api1:
-    image: diogoloff/rinha2025-minimo:latest
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: rinha-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api1
+      - api2
     ports:
-      - "9999:8080"	
+      - "9999:9999"
+    networks:
+      - backend-rinha
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: "10MB"
+
+  api1: &api
+    image: diogoloff/rinha2025-minimo:latest
+    hostname: api1
     environment:
       - DEFAULT_URL=http://payment-processor-default:8080
       - FALLBACK_URL=http://payment-processor-fallback:8080
@@ -16,10 +34,23 @@ services:
       - backend-rinha
       - payment-processor	
     deploy:
-      #resources:
-      #  limits:
-      #    cpus: "0.45"
-      #    memory: "90MB"
+      resources:
+        limits:
+          cpus: "0.45"
+          memory: "90MB"
+
+  api2:
+    <<: *api
+    hostname: api2
+    environment:
+      - DEFAULT_URL=http://payment-processor-default:8080
+      - FALLBACK_URL=http://payment-processor-fallback:8080
+      - DB_NAME=banco.fdb
+      - DB_USER=SYSDBA
+      - DB_PASS=masterkey
+      - DB_HOST=firebird
+      - DB_PORT=3050
+      - INSTANCE_ID=API-2
 
   firebird:
     image: firebirdsql/firebird
@@ -38,10 +69,10 @@ services:
     networks:
       - backend-rinha
     deploy:
-      #resources:
-      #  limits:
-      #    cpus: "0.50"
-      #    memory: "160MB"
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: "160MB"
 
 networks:
   backend-rinha:
