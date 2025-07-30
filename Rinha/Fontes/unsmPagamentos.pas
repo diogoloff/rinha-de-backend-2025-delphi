@@ -7,17 +7,17 @@ uses System.SysUtils, System.Classes, System.Json, System.DateUtils, System.Regu
     FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
     FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef,
     FireDAC.Stan.Option, Data.DB, IdHTTP, undmServer, FireDAC.Stan.Intf, FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf,
-    FireDAC.DApt.Intf, FireDAC.Comp.DataSet;
+    FireDAC.DApt.Intf, FireDAC.Comp.DataSet, IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient;
 
 type
   TsmPagamentos = class(TDSServerModule)
     QyInserePagamento: TFDQuery;
+    IdHTTP: TIdHTTP;
   private
-    function EnviarParaProcessar(const correlationId: string; const amount: Double; const requestedAt: string; const default: Boolean): Boolean;
     { Private declarations }
   public
     { Public declarations }
-    function EnviarPagamento([JSONParam] const JSON: string): String;
+    function EnviarPagamento(const JSON: string): String;
     function ObterResumoPagamentos(const FromISO, ToISO: string): String;
   end;
 
@@ -27,66 +27,16 @@ implementation
 
 {$R *.dfm}
 
-uses unErroHelper, unHealthHelper, unDBHelper, unConstantes;
+uses unErroHelper, unDBHelper, unConstantes;
 
-function TsmPagamentos.EnviarParaProcessar(const correlationId: string; const amount: Double; const requestedAt: string; const default: Boolean): Boolean;
-var
-    lHTTP: TIdHTTP;
-    ljEnviar: TJSONObject;
-    lsResposta: string;
-    lsURL : String;
-    lStream: TStringStream;
-begin
-    Result := False;
-
-    lsURL := FUrl + '/payments';
-    if (not default) then
-        lsURL := FUrlFall + '/payments';
-
-    lHTTP := TIdHTTP.Create(nil);
-    ljEnviar := TJSONObject.Create;
-    try
-        try
-            // Monta o corpo JSON
-            ljEnviar.AddPair('correlationId', correlationId);
-            ljEnviar.AddPair('amount', TJSONNumber.Create(amount));
-            ljEnviar.AddPair('requestedAt', requestedAt);
-
-            lStream := TStringStream.Create(ljEnviar.ToString, TEncoding.UTF8);
-
-            lHTTP.Request.ContentType := 'application/json';
-
-            // Envia a requisição POST
-            lsResposta :=
-                lHTTP.Post(
-                    lsURL,
-                    lStream
-                );
-
-            // Se chegou aqui sem exceção, assume sucesso
-            Result := True;
-        except
-            on E: Exception do
-            begin
-                GerarLog(E.Message, True);
-                Result := False;
-            end;
-        end;
-    finally
-        ljEnviar.Free;
-        lHTTP.Free;
-
-        if Assigned(lStream) then
-            lStream.Free;
-    end;
-end;
-
-function TsmPagamentos.EnviarPagamento([JSONParam] const JSON: string): String;
+function TsmPagamentos.EnviarPagamento(const JSON: string): String;
 var
     ljObj: TJSONObject;
     lCon: TFDConnection;
     ldDataCriacao: TDateTime;
     lbResultado: boolean;
+    liHealth: Integer;
+    lbContinua: Boolean;
 
     correlationId: string;
     amount: Double;
@@ -94,51 +44,117 @@ var
     status: string;
     processor: string;
 begin
+    ljObj := nil;
     try
-        // Tenta converter o JSON para objeto
-        ljObj := TJSONObject.ParseJSONValue(JSON) as TJSONObject;
-        if not Assigned(ljObj) then
-            Exit(ErroJson('JSON inválido.'));
+        try
+            // Tenta converter o JSON para objeto
+            ljObj := TJSONObject.ParseJSONValue(JSON) as TJSONObject;
+            if not Assigned(ljObj) then
+                Exit(ErroJson('JSON inválido.'));
 
-        // Extrai o campo correlationId
-        if not ljObj.TryGetValue('correlationId', correlationId) then
-            Exit(ErroJson('Campo "correlationId" ausente.'));
+            // Extrai o campo correlationId
+            if not ljObj.TryGetValue('correlationId', correlationId) then
+                Exit(ErroJson('Campo "correlationId" ausente.'));
 
-        // Verifica se é um UUID válido
-        if not TRegEx.IsMatch(correlationId, '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') then
-            Exit(ErroJson('Formato de "correlationId" inválido.'));
+            // Verifica se é um UUID válido
+            if not TRegEx.IsMatch(correlationId, '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') then
+                Exit(ErroJson('Formato de "correlationId" inválido.'));
 
-        // Extrai o campo amount
-        if not ljObj.TryGetValue('amount', amount) then
-            Exit(ErroJson('Campo "amount" ausente.'));
+            // Extrai o campo amount
+            if not ljObj.TryGetValue('amount', amount) then
+                Exit(ErroJson('Campo "amount" ausente.'));
 
-        if amount <= 0 then
-            Exit(ErroJson('Campo "amount" deve ser maior que zero.'));
+            if amount <= 0 then
+                Exit(ErroJson('Campo "amount" deve ser maior que zero.'));
+        except
+            on E : Exception do
+            begin
+                GerarLog('Validação JSON: ' + E.Message, True);
+                Exit(ErroJson('Json Mal Formado'));
+            end;
+        end;
     finally
         ljObj.Free;
     end;
 
-    ldDataCriacao := Now;
-    requestedAt := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss"Z"', TTimeZone.Local.ToUniversalTime(ldDataCriacao));
+    try
+        ldDataCriacao := Now;
+        requestedAt := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss"Z"', TTimeZone.Local.ToUniversalTime(ldDataCriacao));
+
+        FFilaLock.Enter;
+        try
+            FFilaEnvio.Add(TRequisicaoPendente.Create(correlationId, amount, requestedAt));
+        finally
+            FFilaLock.Leave;
+        end;
+    except
+        on E : Exception do
+        begin
+            GerarLog('Erro Requisição: ' + E.Message, True);
+            Exit(ErroInterno('Erro Interno Requisição'));
+        end;
+    end;
+
+    Result := '{"success":{"code":200}}';
 
     // simulação da lógica de comunicação com os Processors
-    processor := 'na';
+    {processor := 'na';
     status := 'error';
     lbResultado := False;
+    lbContinua := True;
 
-    if (CheckHealth = 0) then
+    if (FDefaultAtivo) then
     begin
         processor := 'default';
         lbResultado := EnviarParaProcessar(correlationId, amount, requestedAt, True);
+
+        if (not lbResultado) then
+        begin
+            processor := 'fallback';
+            lbResultado := EnviarParaProcessar(correlationId, amount, requestedAt, False);
+
+            if (lbResultado) then
+            begin
+                FMonitorLock.Enter;
+                try
+                    FDefaultAtivo := False;
+                finally
+                    FMonitorLock.Leave;
+                end;
+            end;
+        end;
     end
-    else if (CheckHealth = 1) then
+    else
     begin
         processor := 'fallback';
-        lbResultado := EnviarParaProcessar(correlationId, amount, requestedAt, True);
+        lbResultado := EnviarParaProcessar(correlationId, amount, requestedAt, False);
+
+        if (not lbResultado) then
+        begin
+            processor := 'default';
+            lbResultado := EnviarParaProcessar(correlationId, amount, requestedAt, True);
+
+            if (lbResultado) then
+            begin
+                FMonitorLock.Enter;
+                try
+                    FDefaultAtivo := True;
+                finally
+                    FMonitorLock.Leave;
+                end;
+            end;
+        end;
     end;
 
-    if (lbResultado) then
-        status := 'success';
+    if (not lbResultado) then
+    begin
+        FFilaLock.Enter;
+        try
+            FFilaReenvio.Add(TRequisicaoPendente.Create(correlationId, amount, requestedAt));
+        finally
+            FFilaLock.Leave;
+        end;
+    end;
 
     lCon := CriarConexaoFirebird;
     QyInserePagamento.Connection := lCon;
@@ -165,90 +181,97 @@ begin
             on E : Exception do
             begin
                 lCon.Rollback;
+                GerarLog(E.Message, True);
                 Exit(ErroInterno('Não foi possivel gravar o registro do pagamento'));
             end;
         end;
     finally
         DestruirConexaoFirebird(lCon);
-    end;
+    end; }
 
-    if (not lbResultado) then
-        Exit(ErroInterno('Não foi possivel processar o pagamento'));
+    //if (not lbResultado) then
+    //    Exit(ErroInterno('Não foi possivel processar o pagamento'));
 
-    Result := '{"status":"' + status + '","message":"Pagamento processado"}'
+    //Result := '{"status":"' + status + '","message":"Pagamento processado"}'
 end;
 
 function TsmPagamentos.ObterResumoPagamentos(const FromISO, ToISO: string): String;
 var
-    conn: TFDConnection;
+    lCon: TFDConnection;
     qry: TFDQuery;
     sqlWhere: string;
     TotalDefault, TotalFallback: Integer;
     AmountDefault, AmountFallback: Double;
     FS: TFormatSettings;
 begin
-    conn := CriarConexaoFirebird;
-    qry := TFDQuery.Create(nil);
+    //lCon := CriarConexaoFirebird;
+    //qry := TFDQuery.Create(nil);
     try
-        qry.Connection := conn;
+        //qry.Connection := lCon;
 
-        // Monta WHERE dinâmico
-        sqlWhere := '';
-        if FromISO <> '' then
-            sqlWhere := sqlWhere + ' AND created_at >= :from ';
+        try
+            // Monta WHERE dinâmico
+            {sqlWhere := '';
+            if FromISO <> '' then
+                sqlWhere := sqlWhere + ' AND created_at >= :from ';
 
-        if ToISO <> '' then
-            sqlWhere := sqlWhere + ' AND created_at <= :to ';
+            if ToISO <> '' then
+                sqlWhere := sqlWhere + ' AND created_at <= :to ';
 
-        // Consulta com agregação por processor
-        qry.SQL.Text :=
-            'SELECT processor, COUNT(*) AS totalRequests, SUM(amount) AS totalAmount ' +
-            'FROM payments WHERE status = ''success'' ' + sqlWhere +
-            'GROUP BY processor';
+            // Consulta com agregação por processor
+            qry.SQL.Text :=
+                'SELECT processor, COUNT(*) AS totalRequests, SUM(amount) AS totalAmount ' +
+                'FROM payments WHERE status = ''success'' ' + sqlWhere +
+                'GROUP BY processor';
 
-        if FromISO <> '' then
-            qry.ParamByName('from').AsDateTime := ISO8601ToDate(FromISO);
+            if FromISO <> '' then
+                qry.ParamByName('from').AsDateTime := ISO8601ToDate(FromISO);
 
-        if ToISO <> '' then
-            qry.ParamByName('to').AsDateTime := ISO8601ToDate(ToISO);
+            if ToISO <> '' then
+                qry.ParamByName('to').AsDateTime := ISO8601ToDate(ToISO);
 
-        // Executa e processa o resultado
-        qry.Open;
+            // Executa e processa o resultado
+            qry.Open;  }
 
-        TotalDefault := 0;
-        AmountDefault := 0.0;
+            TotalDefault := 0;
+            AmountDefault := 0.0;
 
-        TotalFallback := 0;
-        AmountFallback := 0.0;
+            TotalFallback := 0;
+            AmountFallback := 0.0;
 
-        while not qry.Eof do
-        begin
-            if qry.FieldByName('processor').AsString = 'default' then
+            {while not qry.Eof do
             begin
-                TotalDefault := qry.FieldByName('totalRequests').AsInteger;
-                AmountDefault := qry.FieldByName('totalAmount').AsFloat;
-            end
-            else
+                if qry.FieldByName('processor').AsString = 'default' then
+                begin
+                    TotalDefault := qry.FieldByName('totalRequests').AsInteger;
+                    AmountDefault := qry.FieldByName('totalAmount').AsFloat;
+                end
+                else
+                begin
+                    TotalFallback := qry.FieldByName('totalRequests').AsInteger;
+                    AmountFallback := qry.FieldByName('totalAmount').AsFloat;
+                end;
+
+                qry.Next;
+            end;  }
+
+            FS := TFormatSettings.Create;
+            FS.DecimalSeparator := '.';
+
+            Result :=
+                '{ "default": { "totalRequests": ' + IntToStr(TotalDefault) +
+                ', "totalAmount": ' + FormatFloat('0.00', AmountDefault, FS) + ' }, ' +
+                '"fallback": { "totalRequests": ' + IntToStr(TotalFallback) +
+                ', "totalAmount": ' + FormatFloat('0.00', AmountFallback, FS) + ' } }';
+        except
+            on E : Exception do
             begin
-                TotalFallback := qry.FieldByName('totalRequests').AsInteger;
-                AmountFallback := qry.FieldByName('totalAmount').AsFloat;
+                GerarLog(E.Message, True);
             end;
-
-            qry.Next;
         end;
-
-        FS := TFormatSettings.Create;
-        FS.DecimalSeparator := '.';
-
-        Result :=
-            '{ "default": { "totalRequests": ' + IntToStr(TotalDefault) +
-            ', "totalAmount": ' + FormatFloat('0.00', AmountDefault, FS) + ' }, ' +
-            '"fallback": { "totalRequests": ' + IntToStr(TotalFallback) +
-            ', "totalAmount": ' + FormatFloat('0.00', AmountFallback, FS) + ' } }';
-
     finally
-        qry.Free;
-        DestruirConexaoFirebird(conn);
+        //qry.Free;
+        //DestruirConexaoFirebird(lCon);
     end;
 end;
 

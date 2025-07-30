@@ -29,6 +29,8 @@ const
     cCommandStatus = 'status';
     cCommandHelp = 'help';
     cCommandExit = 'exit';
+    cTempoMinimoResposta = 30;
+    cTempoMinimoTimeOut = 200;
 
 implementation
 

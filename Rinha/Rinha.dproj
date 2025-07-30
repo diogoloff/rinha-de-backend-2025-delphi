@@ -145,7 +145,6 @@ $(PostBuildEvent)]]></PostBuildEvent>
         </DCCReference>
         <DCCReference Include="Fontes\unConstantes.pas"/>
         <DCCReference Include="Fontes\unErroHelper.pas"/>
-        <DCCReference Include="Fontes\unHealthHelper.pas"/>
         <DCCReference Include="Fontes\unDBHelper.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
