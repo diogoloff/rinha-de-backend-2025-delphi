@@ -12,11 +12,11 @@ services:
     networks:
       - backend-rinha
       - payment-processor
-    deploy:
-      resources:
-        limits:
-          cpus: "0.20"
-          memory: "15MB"
+    #deploy:
+    #  resources:
+    #    limits:
+    #      cpus: "0.20"
+    #      memory: "15MB"
 
   api1: &api
     image: diogoloff/rinha2025-minimo:latest
