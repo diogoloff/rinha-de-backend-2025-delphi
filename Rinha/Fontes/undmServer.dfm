@@ -4,6 +4,7 @@ object dmServer: TdmServer
   Height = 271
   Width = 415
   object DSServer: TDSServer
+    ChannelQueueSize = 500
     Left = 96
     Top = 11
   end
@@ -35,23 +36,6 @@ object dmServer: TdmServer
     Left = 208
     Top = 73
   end
-  object IdHTTP: TIdHTTP
-    AllowCookies = True
-    ProxyParams.BasicAuthentication = False
-    ProxyParams.ProxyPort = 0
-    Request.ContentLength = -1
-    Request.ContentRangeEnd = -1
-    Request.ContentRangeStart = -1
-    Request.ContentRangeInstanceLength = -1
-    Request.Accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    Request.BasicAuthentication = False
-    Request.UserAgent = 'Mozilla/3.0 (compatible; Indy Library)'
-    Request.Ranges.Units = 'bytes'
-    Request.Ranges = <>
-    HTTPOptions = [hoForceEncodeParams]
-    Left = 96
-    Top = 144
-  end
   object IdHTTPPagamentos: TIdHTTP
     AllowCookies = True
     ProxyParams.BasicAuthentication = False
@@ -68,5 +52,22 @@ object dmServer: TdmServer
     HTTPOptions = [hoForceEncodeParams]
     Left = 96
     Top = 200
+  end
+  object IdHTTP: TIdHTTP
+    AllowCookies = True
+    ProxyParams.BasicAuthentication = False
+    ProxyParams.ProxyPort = 0
+    Request.ContentLength = -1
+    Request.ContentRangeEnd = -1
+    Request.ContentRangeStart = -1
+    Request.ContentRangeInstanceLength = -1
+    Request.Accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    Request.BasicAuthentication = False
+    Request.UserAgent = 'Mozilla/3.0 (compatible; Indy Library)'
+    Request.Ranges.Units = 'bytes'
+    Request.Ranges = <>
+    HTTPOptions = [hoForceEncodeParams]
+    Left = 96
+    Top = 144
   end
 end

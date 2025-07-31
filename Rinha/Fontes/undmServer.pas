@@ -23,8 +23,8 @@ type
     FDManagerRinha: TFDManager;
     FDGUIxWaitCursor1: TFDGUIxWaitCursor;
     FDPhysFBDriverLink1: TFDPhysFBDriverLink;
-    IdHTTP: TIdHTTP;
     IdHTTPPagamentos: TIdHTTP;
+    IdHTTP: TIdHTTP;
     procedure DSServerPagamentosGetClass(DSServerClass: TDSServerClass;
       var PersistentClass: TPersistentClass);
     procedure DataModuleCreate(Sender: TObject);
@@ -62,6 +62,8 @@ var
     FFilaEnvio: TList<TRequisicaoPendente>;
     FFilaReEnvio: TList<TRequisicaoPendente>;
     FFilaLock: TCriticalSection;
+
+    FEventoFila: TEvent;
 
 
     {$IFDEF SERVICO}
@@ -119,7 +121,7 @@ begin
     FTempoMinimoRespota := cTempoMinimoResposta;
 
     IdHTTP.ConnectTimeout := 2000;
-    IdHTTP.ReadTimeout := 1000;
+    IdHTTP.ReadTimeout := 5500;
     IdHTTP.Request.ContentType := 'application/json';
 
     TThread.CreateAnonymousThread(
@@ -138,6 +140,7 @@ begin
             begin
                 lbFailing := True;
                 liMinResponseTime := cTempoMinimoResposta;
+
                 try
                     lsResposta := IdHTTP.Get(FURL + '/payments/service-health');
                     ljResposta := TJSONObject.ParseJSONValue(lsResposta) as TJSONObject;
@@ -146,15 +149,33 @@ begin
                         lbFailing := ljResposta.GetValue('failing').Value = 'true';
                         liMinResponseTime := StrToInt(ljResposta.GetValue('minResponseTime').Value);
 
-                       GerarLog('Servico Default failing: ' + BoolToStr(lbFailing) + ' - minResponseTime: ' + IntToStr(liMinResponseTime), True);
+                        GerarLog('Servico Default failing: ' + BoolToStr(lbFailing) + ' - minResponseTime: ' + IntToStr(liMinResponseTime), True);
 
-                       ljResposta.Free;
+                        ljResposta.Free;
                     end;
                 except
                     on E: Exception do
                     begin
                         GerarLog('Erro ao verificar ambiente: ' + E.Message, True);
                     end;
+                    {try
+                        lsResposta := IdHTTP.Get(FURL + '/payments/service-health');
+                        ljResposta := TJSONObject.ParseJSONValue(lsResposta) as TJSONObject;
+                        if Assigned(ljResposta) then
+                        begin
+                            lbFailing := ljResposta.GetValue('failing').Value = 'true';
+                            liMinResponseTime := StrToInt(ljResposta.GetValue('minResponseTime').Value);
+
+                            GerarLog('Servico Default failing: ' + BoolToStr(lbFailing) + ' - minResponseTime: ' + IntToStr(liMinResponseTime), True);
+
+                            ljResposta.Free;
+                        end;
+                    except
+                        on E: Exception do
+                        begin
+                            GerarLog('Erro ao verificar ambiente: ' + E.Message, True);
+                        end;
+                    end; }
                 end;
 
                 if (liMinResponseTime < cTempoMinimoResposta) then
@@ -245,7 +266,7 @@ begin
             liTentativa: Integer;
         begin
             lFilaPendente := TList<TRequisicaoPendente>.Create;
-            lFilaReenvio := TList<TRequisicaoPendente>.Create;
+            //lFilaReenvio := TList<TRequisicaoPendente>.Create;
             lbDefaultAtivo := FDefaultAtivo;
 
             try
@@ -266,6 +287,14 @@ begin
                     end;
                 finally
                     FFilaLock.Leave;
+                end;
+
+                if (lFilaPendente.Count > 0) then
+                begin
+                    for lRequisicao in lFilaPendente do
+                    begin
+
+                    end;
                 end;
 
                 // Processar pendentes
@@ -368,7 +397,7 @@ begin
                 end;   }
             finally
                 lFilaPendente.Free;
-                lFilaReenvio.Free;
+                //lFilaReenvio.Free;
             end;
         end;
     var
@@ -378,7 +407,10 @@ begin
 
         while FProcessamentoAtivo do
         begin
-            if MilliSecondsBetween(Now, ltUltimoProcessamento) >= 100 then
+            if FEventoFila.WaitFor(5000) = wrSignaled then
+                ProcessarFila;
+
+            {if MilliSecondsBetween(Now, ltUltimoProcessamento) >= 100 then
             begin
                 ltUltimoProcessamento := Now;
                 ProcessarFila;
@@ -634,6 +666,7 @@ initialization
     FFilaLock := TCriticalSection.Create;
     FFilaEnvio := TList<TRequisicaoPendente>.Create;
     FFilaReEnvio := TList<TRequisicaoPendente>.Create;
+    FEventoFila := TEvent.Create(nil, False, False, '');
 
 finalization
     FModule.Free;
@@ -642,5 +675,6 @@ finalization
     FFilaLock.Free;
     FFilaEnvio.Free;
     FFilaReEnvio.Free;
+    FEventoFila.Free;
 end.
 
