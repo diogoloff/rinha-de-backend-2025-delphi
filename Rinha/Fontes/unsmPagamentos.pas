@@ -3,16 +3,14 @@
 interface
 
 uses System.SysUtils, System.Classes, System.Json, System.DateUtils,
-    System.RegularExpressions, System.SyncObjs,
     DataSnap.DSProviderDataModuleAdapter, Datasnap.DSServer, Datasnap.DSAuth, REST.HttpClient,
     FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
     FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef,
-    FireDAC.Stan.Option, Data.DB, undmServer, FireDAC.Stan.Intf, FireDAC.Stan.Param, FireDAC.Stan.Error,
+    FireDAC.Stan.Option, Data.DB, FireDAC.Stan.Intf, FireDAC.Stan.Param, FireDAC.Stan.Error,
     FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf, FireDAC.Comp.DataSet;
 
 type
   TsmPagamentos = class(TDSServerModule)
-    QyInserePagamento: TFDQuery;
   private
     { Private declarations }
   public
@@ -27,7 +25,7 @@ implementation
 
 {$R *.dfm}
 
-uses unErroHelper, unDBHelper, unConstantes;
+uses unDBHelper, undmServer;
 
 function TsmPagamentos.EnviarPagamento(const JSON: string): String;
 var
@@ -46,35 +44,28 @@ begin
         ljObj.Free;
     end;
 
-    FFilaLock.Enter;
-    try
-        FFilaEnvio.Add(TRequisicaoPendente.Create(correlationId, amount, requestedAt));
-    finally
-        FFilaLock.Leave;
-    end;
+    AdicionarWorker(correlationId, amount, requestedAt, 0);
 
     Result := '';
-
-    FEventoFila.SetEvent;
 end;
 
 function TsmPagamentos.ObterResumoPagamentos(const FromISO, ToISO: string): String;
 var
     lCon: TFDConnection;
-    qry: TFDQuery;
     sqlWhere: string;
     TotalDefault, TotalFallback: Integer;
     AmountDefault, AmountFallback: Double;
     FS: TFormatSettings;
+    QyPagto: TFDQuery;
 begin
-    //lCon := CriarConexaoFirebird;
-    //qry := TFDQuery.Create(nil);
+    lCon := CriarConexaoFirebird;
+    QyPagto := TFDQuery.Create(nil);
     try
-        //qry.Connection := lCon;
+        QyPagto.Connection := lCon;
 
         try
             // Monta WHERE dinâmico
-            {sqlWhere := '';
+            sqlWhere := '';
             if FromISO <> '' then
                 sqlWhere := sqlWhere + ' AND created_at >= :from ';
 
@@ -82,19 +73,19 @@ begin
                 sqlWhere := sqlWhere + ' AND created_at <= :to ';
 
             // Consulta com agregação por processor
-            qry.SQL.Text :=
+            QyPagto.SQL.Text :=
                 'SELECT processor, COUNT(*) AS totalRequests, SUM(amount) AS totalAmount ' +
                 'FROM payments WHERE status = ''success'' ' + sqlWhere +
                 'GROUP BY processor';
 
             if FromISO <> '' then
-                qry.ParamByName('from').AsDateTime := ISO8601ToDate(FromISO);
+                QyPagto.ParamByName('from').AsDateTime := ISO8601ToDate(FromISO);
 
             if ToISO <> '' then
-                qry.ParamByName('to').AsDateTime := ISO8601ToDate(ToISO);
+                QyPagto.ParamByName('to').AsDateTime := ISO8601ToDate(ToISO);
 
             // Executa e processa o resultado
-            qry.Open;  }
+            QyPagto.Open;
 
             TotalDefault := 0;
             AmountDefault := 0.0;
@@ -102,21 +93,21 @@ begin
             TotalFallback := 0;
             AmountFallback := 0.0;
 
-            {while not qry.Eof do
+            while not QyPagto.Eof do
             begin
-                if qry.FieldByName('processor').AsString = 'default' then
+                if QyPagto.FieldByName('processor').AsString = 'default' then
                 begin
-                    TotalDefault := qry.FieldByName('totalRequests').AsInteger;
-                    AmountDefault := qry.FieldByName('totalAmount').AsFloat;
+                    TotalDefault := QyPagto.FieldByName('totalRequests').AsInteger;
+                    AmountDefault := QyPagto.FieldByName('totalAmount').AsFloat;
                 end
                 else
                 begin
-                    TotalFallback := qry.FieldByName('totalRequests').AsInteger;
-                    AmountFallback := qry.FieldByName('totalAmount').AsFloat;
+                    TotalFallback := QyPagto.FieldByName('totalRequests').AsInteger;
+                    AmountFallback := QyPagto.FieldByName('totalAmount').AsFloat;
                 end;
 
-                qry.Next;
-            end;  }
+                QyPagto.Next;
+            end;
 
             FS := TFormatSettings.Create;
             FS.DecimalSeparator := '.';
@@ -133,8 +124,8 @@ begin
             end;
         end;
     finally
-        //qry.Free;
-        //DestruirConexaoFirebird(lCon);
+        QyPagto.Free;
+        DestruirConexaoFirebird(lCon);
     end;
 end;
 
