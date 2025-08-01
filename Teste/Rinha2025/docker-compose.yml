@@ -29,6 +29,9 @@ services:
       - DB_PASS=masterkey
       - DB_HOST=firebird
       - DB_PORT=3050
+      - RES_TIME_OUT=10000
+      - NUM_WORKERS=100
+      - DEBUG=N
       - INSTANCE_ID=API-1
     networks:
       - backend-rinha
@@ -45,6 +48,9 @@ services:
       - DB_PASS=masterkey
       - DB_HOST=firebird
       - DB_PORT=3050
+      - RES_TIME_OUT=10000
+      - NUM_WORKERS=100
+      - DEBUG=N
       - INSTANCE_ID=API-2
 
   firebird:
@@ -63,11 +69,11 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - backend-rinha
-    deploy:
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: "160MB"
+    #deploy:
+    #  resources:
+    #    limits:
+    #      cpus: "0.50"
+    #      memory: "160MB"
 
 networks:
   backend-rinha:
