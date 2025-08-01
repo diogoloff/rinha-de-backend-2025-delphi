@@ -16,7 +16,8 @@ uses
   undmModuloWeb in 'Fontes\undmModuloWeb.pas' {dmModuloWeb: TWebModule},
   unConstantes in 'Fontes\unConstantes.pas',
   unErroHelper in 'Fontes\unErroHelper.pas',
-  unDBHelper in 'Fontes\unDBHelper.pas';
+  unDBHelper in 'Fontes\unDBHelper.pas',
+  unWorkerHelper in 'Fontes\unWorkerHelper.pas';
 
 {$R *.res}
 

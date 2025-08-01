@@ -6,15 +6,18 @@ uses System.SysUtils, System.Classes, System.IOUtils, System.SyncObjs, System.Da
   Datasnap.DSServer, Datasnap.DSCommonServer, Datasnap.DSAuth, Datasnap.DSSession,
   IPPeerServer, IPPeerAPI, IdHTTPWebBrokerBridge, FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf,
   FireDAC.Stan.Def, FireDAC.Phys, FireDAC.Comp.Client, FireDAC.ConsoleUI.Wait, FireDAC.Phys.FBDef, FireDAC.Phys.IBBase, FireDAC.Phys.FB, FireDAC.Comp.UI,
-  IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP, System.Generics.Collections;
+  IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP, System.Generics.Collections, FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf,
+  FireDAC.Stan.Async, FireDAC.DApt, Data.DB, FireDAC.Comp.DataSet, unWorkerHelper;
 
 type
   TRequisicaoPendente = record
     correlationId: string;
     amount: Double;
     requestedAt: String;
+    error: Boolean;
+    attempt: Integer;
 
-    constructor Create(const AId: string; AAmount: Double; ARequestedAt: String);
+    constructor Create(const AId: string; AAmount: Double; ARequestedAt: String; AAttempt: Integer);
   end;
 
   TdmServer = class(TDataModule)
@@ -23,17 +26,16 @@ type
     FDManagerRinha: TFDManager;
     FDGUIxWaitCursor1: TFDGUIxWaitCursor;
     FDPhysFBDriverLink1: TFDPhysFBDriverLink;
-    IdHTTPPagamentos: TIdHTTP;
     IdHTTP: TIdHTTP;
     procedure DSServerPagamentosGetClass(DSServerClass: TDSServerClass;
       var PersistentClass: TPersistentClass);
     procedure DataModuleCreate(Sender: TObject);
   private
     FMonitoramentoAtivo: Boolean;
-    FProcessamentoAtivo: Boolean;
+
     procedure PreparaConexaoBanco;
     procedure MonitorarServicoPagamento;
-    procedure IniciarServicoPagamento;
+
     { Private declarations }
   public
     constructor Create(AOwner: TComponent); override;
@@ -42,10 +44,11 @@ type
 
 function DSServer: TDSServer;
 
+procedure AdicionarWorker(correlationId: string; amount: Double; requestedAt: string; attempt: Integer);
 procedure TerminateThreads;
 procedure RunDSServer(const AServer: TIdHTTPWebBrokerBridge);
 procedure StopServer(const AServer: TIdHTTPWebBrokerBridge);
-function GetEnvURL(const EnvVar, DefaultURL: string): string;
+function GetEnv(const lsEnvVar, lsDefault: string): string;
 procedure GerarLog(lsMsg : String; lbForcaArquivo : Boolean = False; lbQuebraLinhaConsole : Boolean = True);
 
 var
@@ -58,13 +61,10 @@ var
     FMonitorLock: TCriticalSection;
     FDefaultAtivo: Boolean;
     FTempoMinimoRespota: Integer;
+    FilaManager: TFilaWorkerManager;
 
-    FFilaEnvio: TList<TRequisicaoPendente>;
-    FFilaReEnvio: TList<TRequisicaoPendente>;
-    FFilaLock: TCriticalSection;
-
-    FEventoFila: TEvent;
-
+    FTempoMinimoRespostaPadrao : Integer;
+    FDebug : Boolean;
 
     {$IFDEF SERVICO}
         FServerIniciado: Boolean;
@@ -118,9 +118,9 @@ procedure TdmServer.MonitorarServicoPagamento;
 begin
     FMonitoramentoAtivo := True;
     FDefaultAtivo := True;
-    FTempoMinimoRespota := cTempoMinimoResposta;
+    FTempoMinimoRespota := FTempoMinimoRespostaPadrao;
 
-    IdHTTP.ConnectTimeout := 2000;
+    IdHTTP.ConnectTimeout := cTempoMinimoTimeOut;
     IdHTTP.ReadTimeout := 5500;
     IdHTTP.Request.ContentType := 'application/json';
 
@@ -139,7 +139,7 @@ begin
             if (Trim(FURL) <> '') then
             begin
                 lbFailing := True;
-                liMinResponseTime := cTempoMinimoResposta;
+                liMinResponseTime := FTempoMinimoRespostaPadrao;
 
                 try
                     lsResposta := IdHTTP.Get(FURL + '/payments/service-health');
@@ -158,28 +158,10 @@ begin
                     begin
                         GerarLog('Erro ao verificar ambiente: ' + E.Message, True);
                     end;
-                    {try
-                        lsResposta := IdHTTP.Get(FURL + '/payments/service-health');
-                        ljResposta := TJSONObject.ParseJSONValue(lsResposta) as TJSONObject;
-                        if Assigned(ljResposta) then
-                        begin
-                            lbFailing := ljResposta.GetValue('failing').Value = 'true';
-                            liMinResponseTime := StrToInt(ljResposta.GetValue('minResponseTime').Value);
-
-                            GerarLog('Servico Default failing: ' + BoolToStr(lbFailing) + ' - minResponseTime: ' + IntToStr(liMinResponseTime), True);
-
-                            ljResposta.Free;
-                        end;
-                    except
-                        on E: Exception do
-                        begin
-                            GerarLog('Erro ao verificar ambiente: ' + E.Message, True);
-                        end;
-                    end; }
                 end;
 
-                if (liMinResponseTime < cTempoMinimoResposta) then
-                    liMinResponseTime := cTempoMinimoResposta;
+                if (liMinResponseTime < FTempoMinimoRespostaPadrao) then
+                    liMinResponseTime := FTempoMinimoRespostaPadrao;
 
                 FMonitorLock.Enter;
                 try
@@ -193,32 +175,44 @@ begin
     end).Start;
 end;
 
-procedure TdmServer.IniciarServicoPagamento;
+procedure TdmServer.DataModuleCreate(Sender: TObject);
 begin
-    FProcessamentoAtivo := True;
+    PreparaConexaoBanco;
 
-    IdHTTPPagamentos.ConnectTimeout := cTempoMinimoTimeOut;
-    IdHTTPPagamentos.Request.ContentType := 'application/json';
+    MonitorarServicoPagamento;
+end;
 
-    TThread.CreateAnonymousThread(
-    procedure
-        function EnviarParaProcessar(const correlationId: string; const amount: Double; const requestedAt: string; const default: Boolean): Boolean;
-        var
-            ljEnviar: TJSONObject;
-            lsResposta: string;
-            lsURL : String;
-            lStream: TStringStream;
-        begin
-            IdHTTPPagamentos.ReadTimeout := FTempoMinimoRespota + 10;
+destructor TdmServer.Destroy;
+begin
+    inherited;
 
-            if (FTempoMinimoRespota > 110) then
-            begin
-                Result := False;
-                Exit;
-            end;
+    FMonitoramentoAtivo := False;
+    FDSServer := nil;
+end;
+
+procedure TdmServer.DSServerPagamentosGetClass(
+  DSServerClass: TDSServerClass; var PersistentClass: TPersistentClass);
+begin
+    PersistentClass := unsmPagamentos.TsmPagamentos;
+end;
+
+procedure ProcessarRequisicao(AReq: TRequisicaoPendente);
+    function EnviarParaProcessar(lbDefaultProcessor: Boolean): Boolean;
+    var
+        ljEnviar: TJSONObject;
+        lsResposta: string;
+        lsURL : String;
+        lStream: TStringStream;
+        IdHTTPPagamentos: TIdHTTP;
+    begin
+        IdHTTPPagamentos := TIdHTTP.Create(nil);
+        try
+            IdHTTPPagamentos.ConnectTimeout := cTempoMinimoTimeOut;
+            IdHTTPPagamentos.ReadTimeout :=  FTempoMinimoRespostaPadrao * AReq.attempt;
+            IdHTTPPagamentos.Request.ContentType := 'application/json';
 
             lsURL := FUrl + '/payments';
-            if (not default) then
+            if (not lbDefaultProcessor) then
                 lsURL := FUrlFall + '/payments';
 
             ljEnviar := TJSONObject.Create;
@@ -226,9 +220,9 @@ begin
             try
                 try
                     // Monta o corpo JSON
-                    ljEnviar.AddPair('correlationId', correlationId);
-                    ljEnviar.AddPair('amount', TJSONNumber.Create(amount));
-                    ljEnviar.AddPair('requestedAt', requestedAt);
+                    ljEnviar.AddPair('correlationId', AReq.correlationId);
+                    ljEnviar.AddPair('amount', TJSONNumber.Create(AReq.amount));
+                    ljEnviar.AddPair('requestedAt', AReq.requestedAt);
 
                     lStream := TStringStream.Create(ljEnviar.ToString, TEncoding.UTF8);
 
@@ -239,14 +233,15 @@ begin
                             lStream
                         );
 
-                    // Se chegou aqui sem exceção, assume sucesso
                     Result := True;
                 except
-                    on E: Exception do
-                    begin
-                        GerarLog('Pagamento: ' + lsURL + ' - ' + E.Message, True);
-                        Result := False;
-                    end;
+                    Result := False;
+
+                    //on E: Exception do
+                    //begin
+                    //    GerarLog('Pagamento: ' + lsURL + ' - ' + E.Message, True);
+                    //    Result := False;
+                    //end;
                 end;
             finally
                 if Assigned(lStream) then
@@ -254,193 +249,100 @@ begin
 
                 ljEnviar.Free;
             end;
+        finally
+            IdHTTPPagamentos.Free;
         end;
+    end;
 
-        procedure ProcessarFila;
-        var
-            lFilaPendente: TList<TRequisicaoPendente>;
-            lFilaReenvio: TList<TRequisicaoPendente>;
-            lRequisicao: TRequisicaoPendente;
-            lbResultado: Boolean;
-            lbDefaultAtivo: Boolean;
-            liTentativa: Integer;
-        begin
-            lFilaPendente := TList<TRequisicaoPendente>.Create;
-            //lFilaReenvio := TList<TRequisicaoPendente>.Create;
-            lbDefaultAtivo := FDefaultAtivo;
+    procedure Gravar(lbDefaultProcessor: Boolean);
+    var
+        lCon: TFDConnection;
+        QyPagto: TFDQuery;
+    begin
+        lCon := CriarConexaoFirebird;
+        QyPagto := TFDQuery.Create(nil);
+        try
+            QyPagto.Connection := lCon;
+
+            lCon.StartTransaction;
+
+            QyPagto.SQL.Text :=
+                'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
 
             try
-                // Esvazia a fila de requisições global para uma fila pendentes
-                FFilaLock.Enter;
-                try
-                    try
-                        if (FFilaEnvio.Count > 0) then
-                        begin
-                            lFilaPendente.AddRange(FFilaEnvio);
-                            FFilaEnvio.Clear;
-                        end;
-                    except
-                        on E : Exception do
-                        begin
-                            GerarLog('Move Fila Normal: ' + E.Message, True);
-                        end;
-                    end;
-                finally
-                    FFilaLock.Leave;
+                with AReq do
+                begin
+                    QyPagto.ParamByName('CORRELATION_ID').AsString := correlationId;
+                    QyPagto.ParamByName('AMOUNT').AsFloat := amount;
+
+                    QyPagto.ParamByName('STATUS').AsString := 'success';
+                    if (error) then
+                        QyPagto.ParamByName('STATUS').AsString := 'error';
+
+                    QyPagto.ParamByName('PROCESSOR').AsString := 'fallback';
+                    if (lbDefaultProcessor) then
+                        QyPagto.ParamByName('PROCESSOR').AsString := 'default';
+
+                    QyPagto.ParamByName('CREATED_AT').AsDateTime := ISO8601ToDate(requestedAt);
+                    QyPagto.ExecSQL;
                 end;
 
-                if (lFilaPendente.Count > 0) then
+                lCon.Commit;
+            except
+                on E : Exception do
                 begin
-                    for lRequisicao in lFilaPendente do
-                    begin
-
-                    end;
+                    lCon.Rollback;
+                    GerarLog('Erro Gravar: ' + E.Message, True);
                 end;
+            end;
+        finally
+            QyPagto.Free;
+            DestruirConexaoFirebird(lCon);
+        end;
+    end;
 
-                // Processar pendentes
-                {if (lFilaPendente.Count > 0) then
-                begin
-                    liTentativa := 0;
-                    try
-                        for lRequisicao in lFilaPendente do
-                        begin
-                            lbResultado := False;
-                            if (liTentativa < 3) then
-                                lbResultado := EnviarParaProcessar(lRequisicao.correlationId, lRequisicao.amount, lRequisicao.requestedAt, lbDefaultAtivo);
+var
+    lbResultado: Boolean;
+    lbDefaultAtivo: Boolean;
+begin
+    //if (AReq.attempt < 10) then
+    //begin
+        inc(AReq.attempt);
+        lbDefaultAtivo := FDefaultAtivo;
 
-                            if (lbResultado) then
-                            begin
-                                // Adicionar para gravar
-                            end
-                            else
-                            begin
-                                inc(liTentativa);
-                                FFilaReEnvio.Add(lRequisicao);
+        //if (FTempoMinimoRespota > cTempoMinimoResposta) then
+        //    dec(AReq.attempt)
+        //else
 
-                                FMonitorLock.Enter;
-                                try
-                                    if (lbDefaultAtivo <> FDefaultAtivo) then
-                                    begin
-                                        liTentativa := 0;
-                                        lbDefaultAtivo := FDefaultAtivo;
-                                    end;
-                                finally
-                                    FMonitorLock.Leave;
-                                end;
-                            end;
-                        end;
-                    except
-                        on E : Exception do
-                        begin
-                            GerarLog('Processar Fila Normal: ' + E.Message, True);
-                        end;
-                    end;
+        if (FTempoMinimoRespota <= FTempoMinimoRespostaPadrao) or (AReq.attempt > 5) then
+        begin
+            lbResultado := EnviarParaProcessar(lbDefaultAtivo);
 
-                    if (liTentativa >= 3) then
-                        Exit;
-                end;
-
-                // Esvaiza a fila de reenvio global para reenvio local
-                if (FFilaReEnvio.Count > 0) then
-                begin
-                    try
-                        lFilaReenvio.AddRange(FFilaReEnvio);
-                        FFilaReEnvio.Clear;
-                    except
-                        on E : Exception do
-                        begin
-                            GerarLog('Move Fila Reenvio: ' + E.Message, True);
-                        end;
-                    end;
-                end;
-
-                // Processar renvios
-                if (lFilaReenvio.Count > 0) then
-                begin
-                    liTentativa := 0;
-                    try
-                        for lRequisicao in lFilaReenvio do
-                        begin
-                            lbResultado := False;
-                            if (liTentativa < 3) then
-                                lbResultado := EnviarParaProcessar(lRequisicao.correlationId, lRequisicao.amount, lRequisicao.requestedAt, lbDefaultAtivo);
-
-                            if (lbResultado) then
-                            begin
-                                // Adicionar para gravar
-                                // Aqui no reenvio em caso de falha poderiam existir outras lógicas como numero de tentativas
-                                // forçar um estorno, etc em caso de um cenário real.
-                            end
-                            else
-                            begin
-                                inc(liTentativa);
-                                FFilaReEnvio.Add(lRequisicao);
-
-                                FMonitorLock.Enter;
-                                try
-                                    if (lbDefaultAtivo <> FDefaultAtivo) then
-                                    begin
-                                        liTentativa := 0;
-                                        lbDefaultAtivo := FDefaultAtivo;
-                                    end;
-                                finally
-                                    FMonitorLock.Leave;
-                                end;
-                            end;
-                        end;
-                    except
-                        on E : Exception do
-                        begin
-                            GerarLog('Processar Fila Reenvio: ' + E.Message, True);
-                        end;
-                    end;
-                end;   }
-            finally
-                lFilaPendente.Free;
-                //lFilaReenvio.Free;
+            if (lbResultado) then
+            begin
+                Gravar(lbDefaultAtivo);
+                Exit
             end;
         end;
+
+        Sleep(FTempoMinimoRespostaPadrao * AReq.attempt);
+
+        AdicionarWorker(AReq.correlationId, AReq.amount, AReq.requestedAt, AReq.attempt);
+    //end
+    //else
+    //    GerarLog('ERRO GRAVAR: ' + AReq.correlationId, True);
+end;
+
+procedure AdicionarWorker(correlationId: string; amount: Double; requestedAt: string; attempt: Integer);
+begin
+    FilaManager.EnfileirarTarefa(
+    procedure
     var
-        ltUltimoProcessamento: TDateTime;
+        ltReq : TRequisicaoPendente;
     begin
-        ltUltimoProcessamento := Now;
-
-        while FProcessamentoAtivo do
-        begin
-            if FEventoFila.WaitFor(5000) = wrSignaled then
-                ProcessarFila;
-
-            {if MilliSecondsBetween(Now, ltUltimoProcessamento) >= 100 then
-            begin
-                ltUltimoProcessamento := Now;
-                ProcessarFila;
-            end
-            else
-                Sleep(100); // pequena pausa para não consumir CPU       }
-        end;
-    end).Start;
-end;
-
-procedure TdmServer.DataModuleCreate(Sender: TObject);
-begin
-    PreparaConexaoBanco;
-
-    MonitorarServicoPagamento;
-    IniciarServicoPagamento;
-end;
-
-destructor TdmServer.Destroy;
-begin
-    inherited;
-    FMonitoramentoAtivo := False;
-    FProcessamentoAtivo := False;
-    FDSServer := nil;
-end;
-
-procedure TdmServer.DSServerPagamentosGetClass(
-  DSServerClass: TDSServerClass; var PersistentClass: TPersistentClass);
-begin
-    PersistentClass := unsmPagamentos.TsmPagamentos;
+        ltReq := TRequisicaoPendente.Create(correlationId, amount, requestedAt, attempt);
+        ProcessarRequisicao(ltReq);
+    end);
 end;
 
 function BindPort(APort: Integer): Boolean;
@@ -524,11 +426,11 @@ begin
     GerarLog(cArrow);
 end;
 
-function GetEnvURL(const EnvVar, DefaultURL: string): string;
+function GetEnv(const lsEnvVar, lsDefault: string): string;
 begin
-    Result := GetEnvironmentVariable(EnvVar);
+    Result := GetEnvironmentVariable(lsEnvVar);
     if Result = '' then
-        Result := DefaultURL;
+        Result := lsDefault;
 end;
 
 procedure RunDSServer(const AServer: TIdHTTPWebBrokerBridge);
@@ -568,9 +470,6 @@ procedure RunDSServer(const AServer: TIdHTTPWebBrokerBridge);
 begin
     {$IFDEF SERVICO}
         FServerIniciado := False;
-
-        FUrl := GetEnvURL('DEFAULT_URL', 'http://localhost:8001');
-        FUrlFall := GetEnvURL('FALLBACK_URL', 'http://localhost:8002');
     {$ENDIF}
 
     {$IFNDEF LINUX64}
@@ -608,7 +507,7 @@ var
     lsArquivo : String;
     lsData : String;
 begin
-    if (not cDebug) then
+    if (not FDebug) then
         Exit;
 
     {$IFNDEF SERVICO}
@@ -652,29 +551,31 @@ end;
 
 { TRequisicaoPendente }
 
-constructor TRequisicaoPendente.Create(const AId: string; AAmount: Double; ARequestedAt: String);
+constructor TRequisicaoPendente.Create(const AId: string; AAmount: Double; ARequestedAt: String; AAttempt: Integer);
 begin
     correlationId := AId;
     amount := AAmount;
     requestedAt := ARequestedAt;
+    error := False;
+    attempt := AAttempt;
 end;
 
 initialization
     FModule := TdmServer.Create(nil);
     FLogLock := TCriticalSection.Create;
     FMonitorLock := TCriticalSection.Create;
-    FFilaLock := TCriticalSection.Create;
-    FFilaEnvio := TList<TRequisicaoPendente>.Create;
-    FFilaReEnvio := TList<TRequisicaoPendente>.Create;
-    FEventoFila := TEvent.Create(nil, False, False, '');
+    FDebug := GetEnv('DEBUG', 'N') = 'S';
+    FilaManager := TFilaWorkerManager.Create;
+    FilaManager.Iniciar(StrToInt(GetEnv('NUM_WORKERS', '1000')));
+    FUrl := GetEnv('DEFAULT_URL', 'http://localhost:8001');
+    FUrlFall := GetEnv('FALLBACK_URL', 'http://localhost:8002');
+    FTempoMinimoRespostaPadrao := StrToInt(GetEnv('RES_TIME_OUT', '50'));
+
 
 finalization
     FModule.Free;
     FLogLock.Free;
     FMonitorLock.Free;
-    FFilaLock.Free;
-    FFilaEnvio.Free;
-    FFilaReEnvio.Free;
-    FEventoFila.Free;
+    FilaManager.Free;
 end.
 
