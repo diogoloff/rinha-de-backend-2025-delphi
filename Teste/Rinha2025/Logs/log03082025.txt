@@ -1,0 +1,67 @@
+2025-08-03T04:31:48Z:- Starting HTTP Server on port 8080
+2025-08-03T04:31:48Z:->
+2025-08-03T04:32:31Z:Fila parada pelo sinal.
+2025-08-03T04:32:31Z:Fila parada pelo sinal.
+2025-08-03T04:32:32Z:Fila parada pelo sinal.
+2025-08-03T04:32:32Z:Fila parada pelo sinal.
+2025-08-03T04:32:32Z:Fila parada pelo sinal.
+2025-08-03T04:32:33Z:Fila parada pelo sinal.
+2025-08-03T04:32:41Z:Requisição muito antiga, possível lag: 51a6feed-6420-489b-8355-7549ddeae37f
+2025-08-03T04:32:52Z:Requisição muito antiga, possível lag: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:32:52Z:Requisição muito antiga, possível lag: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:32:53Z:Requisição muito antiga, possível lag: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:32:53Z:Requisição muito antiga, possível lag: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:32:54Z:Requisição muito antiga, possível lag: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:32:54Z:Requisição muito antiga, possível lag: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:32:58Z:Requisição muito antiga, possível lag: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:32:58Z:Requisição muito antiga, possível lag: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:32:58Z:Requisição muito antiga, possível lag: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:32:59Z:Requisição muito antiga, possível lag: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:32:59Z:Requisição muito antiga, possível lag: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:32:59Z:Requisição muito antiga, possível lag: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:33:03Z:Requisição muito antiga, possível lag: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:33:03Z:Requisição muito antiga, possível lag: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:33:04Z:Requisição muito antiga, possível lag: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:33:04Z:Requisição muito antiga, possível lag: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:33:05Z:Requisição muito antiga, possível lag: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:33:05Z:Requisição muito antiga, possível lag: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:33:08Z:Requisição muito antiga, possível lag: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:33:09Z:Requisição muito antiga, possível lag: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:33:09Z:Requisição muito antiga, possível lag: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:33:09Z:Requisição muito antiga, possível lag: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:33:10Z:Requisição muito antiga, possível lag: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:33:10Z:Requisição muito antiga, possível lag: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:33:14Z:Requisição muito antiga, possível lag: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:33:14Z:Requisição muito antiga, possível lag: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:33:15Z:Requisição muito antiga, possível lag: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:33:15Z:Requisição muito antiga, possível lag: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:33:15Z:Requisição muito antiga, possível lag: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:33:15Z:Requisição muito antiga, possível lag: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:33:19Z:Requisição muito antiga, possível lag: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:33:19Z:Requisição muito antiga, possível lag: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:33:20Z:Requisição muito antiga, possível lag: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:33:20Z:Requisição muito antiga, possível lag: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:33:21Z:Requisição muito antiga, possível lag: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:33:21Z:Requisição muito antiga, possível lag: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:33:25Z:Requisição muito antiga, possível lag: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:33:25Z:Requisição muito antiga, possível lag: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:33:25Z:Requisição muito antiga, possível lag: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:33:25Z:Requisição muito antiga, possível lag: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:33:26Z:Requisição muito antiga, possível lag: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:33:26Z:Requisição muito antiga, possível lag: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:33:30Z:Requisição muito antiga, possível lag: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:33:30Z:Transação Perdida: 1fa48925-5b64-4529-ae17-80b5d5806bb1
+2025-08-03T04:33:30Z:Requisição muito antiga, possível lag: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:33:30Z:Transação Perdida: 7fee2908-a190-4fe4-a70a-bcb22aa4df6d
+2025-08-03T04:33:31Z:Requisição muito antiga, possível lag: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:33:31Z:Transação Perdida: 8351315b-8204-4bcb-86ce-1a9f6318ef94
+2025-08-03T04:33:31Z:Requisição muito antiga, possível lag: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:33:31Z:Transação Perdida: e5bd681d-bb37-4708-9968-f6541e5aabb0
+2025-08-03T04:33:31Z:Requisição muito antiga, possível lag: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:33:31Z:Transação Perdida: 661a05be-c55c-45f2-b34f-9ff29a3507f1
+2025-08-03T04:33:32Z:Requisição muito antiga, possível lag: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:33:32Z:Transação Perdida: c93db82d-efdd-438a-97c7-5e1b0847124f
+2025-08-03T04:34:38Z:- Stopping Server
+2025-08-03T04:34:38Z:- Server Stopped
+2025-08-03T04:34:38Z:->
+2025-08-03T04:34:41Z:Erro Servico  - C:5000 - R:3000 - RES:1000 - Monitorar: http://payment-processor-default:8080 - Read timed out.
