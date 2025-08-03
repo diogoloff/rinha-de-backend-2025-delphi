@@ -1,6 +1,7 @@
 object dmServer: TdmServer
   OldCreateOrder = False
   OnCreate = DataModuleCreate
+  OnDestroy = DataModuleDestroy
   Height = 271
   Width = 415
   object DSServer: TDSServer
@@ -23,6 +24,7 @@ object dmServer: TdmServer
     ResourceOptions.KeepConnection = False
     UpdateOptions.AssignedValues = [uvLockMode]
     UpdateOptions.LockMode = lmPessimistic
+    Active = True
     Left = 96
     Top = 72
   end
@@ -35,22 +37,5 @@ object dmServer: TdmServer
   object FDPhysFBDriverLink1: TFDPhysFBDriverLink
     Left = 208
     Top = 73
-  end
-  object IdHTTP: TIdHTTP
-    AllowCookies = True
-    ProxyParams.BasicAuthentication = False
-    ProxyParams.ProxyPort = 0
-    Request.ContentLength = -1
-    Request.ContentRangeEnd = -1
-    Request.ContentRangeStart = -1
-    Request.ContentRangeInstanceLength = -1
-    Request.Accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    Request.BasicAuthentication = False
-    Request.UserAgent = 'Mozilla/3.0 (compatible; Indy Library)'
-    Request.Ranges.Units = 'bytes'
-    Request.Ranges = <>
-    HTTPOptions = [hoForceEncodeParams]
-    Left = 96
-    Top = 144
   end
 end

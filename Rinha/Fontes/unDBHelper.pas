@@ -1,4 +1,4 @@
-unit unDBHelper;
+﻿unit unDBHelper;
 
 interface
 
@@ -6,7 +6,7 @@ uses
   System.SysUtils, System.Classes,
   FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
   FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef, FireDAC.Stan.Pool,
-  FireDAC.Stan.Option, Data.DB, undmServer;
+  FireDAC.Stan.Option, Data.DB, unGenerica;
 
 function CriarConexaoFirebird: TFDConnection;
 function ParametrosBanco: TStringList;
@@ -18,18 +18,17 @@ function CriarConexaoFirebird: TFDConnection;
 var
     lCon: TFDConnection;
 begin
-    lCon := nil;
+    lCon := TFDConnection.Create(nil);
     try
-        lCon := TFDConnection.Create(nil);
-        lCon.DriverName := 'FB';
+        //lCon.DriverName := 'FB';
         lCon.ConnectionDefName := 'RINHA';
         lCon.LoginPrompt := False;
+        lCon.TxOptions.AutoCommit := True;
         lCon.TxOptions.AutoStop := False;
-        lCon.TxOptions.DisconnectAction := xdRollback;
+        {lCon.TxOptions.DisconnectAction := xdRollback;
         lCon.UpdateOptions.UpdateMode := upWhereKeyOnly;
         lCon.UpdateOptions.LockMode := lmPessimistic;
-        lCon.ResourceOptions.KeepConnection := False;
-
+        lCon.ResourceOptions.KeepConnection := False;}
         lCon.Connected := True;
         Result := lCon;
     except
@@ -50,7 +49,9 @@ begin
     with Result do
     begin
         Add('Pooled=True');
-        Add('POOL_MaximumItems=50');
+        Add('POOL_MaximumItems=500');
+        Add('POOL_CleanupTimeout=5');
+        Add('ReadConsistency=True');
         Add('Database=/var/lib/firebird/data/' + GetEnv('DB_NAME', 'banco.fdb'));
         Add('User_Name=' + GetEnv('DB_USER', 'SYSDBA'));
         Add('Password=' + GetEnv('DB_PASS', 'masterkey'));

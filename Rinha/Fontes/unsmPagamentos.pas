@@ -7,7 +7,8 @@ uses System.SysUtils, System.Classes, System.Json, System.DateUtils,
     FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
     FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef,
     FireDAC.Stan.Option, Data.DB, FireDAC.Stan.Intf, FireDAC.Stan.Param, FireDAC.Stan.Error,
-    FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf, FireDAC.Comp.DataSet;
+    FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf, FireDAC.Comp.DataSet,
+    unGenerica, unRequisicaoPendente, unDBHelper, unLogHelper, unScheduledHelper;
 
 type
   TsmPagamentos = class(TDSServerModule)
@@ -25,14 +26,13 @@ implementation
 
 {$R *.dfm}
 
-uses unDBHelper, undmServer;
-
 function TsmPagamentos.EnviarPagamento(const JSON: string): String;
 var
     ljObj: TJSONObject;
     correlationId: string;
     amount: Double;
     requestedAt: string;
+    ltReq: TRequisicaoPendente;
 begin
     ljObj := nil;
     try
@@ -44,7 +44,11 @@ begin
         ljObj.Free;
     end;
 
-    AdicionarWorker(correlationId, amount, requestedAt, 0);
+    FilaLogger.LogEntrada(correlationId);
+
+    ltReq := TRequisicaoPendente.Create(correlationId, amount, requestedAt);
+
+    AdicionarWorker(ltReq);
 
     Result := '';
 end;
@@ -120,7 +124,7 @@ begin
         except
             on E : Exception do
             begin
-                GerarLog(E.Message, True);
+                GerarLog(E.Message);
             end;
         end;
     finally
