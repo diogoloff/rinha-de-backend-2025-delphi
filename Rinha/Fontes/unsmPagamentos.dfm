@@ -1,5 +1,5 @@
 object smPagamentos: TsmPagamentos
   OldCreateOrder = False
-  Height = 226
-  Width = 151
+  Height = 124
+  Width = 154
 end

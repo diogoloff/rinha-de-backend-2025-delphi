@@ -1,4 +1,4 @@
-unit unConstantes;
+﻿unit unConstantes;
 
 interface
 
@@ -29,7 +29,6 @@ const
     cCommandStatus = 'status';
     cCommandHelp = 'help';
     cCommandExit = 'exit';
-    cTempoMinimoTimeOut = 3000;
 
 implementation
 

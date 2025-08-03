@@ -11,13 +11,18 @@ uses
   WiRL.Console.Posix.Daemon,
   WiRL.Console.Posix.Syslog,
   {$ENDIF }
+  unConstantes in 'Fontes\unConstantes.pas',
+  unGenerica in 'Fontes\unGenerica.pas',
+  unRequisicaoPendente in 'Fontes\unRequisicaoPendente.pas',
+  unErroHelper in 'Fontes\unErroHelper.pas',
+  unLogHelper in 'Fontes\unLogHelper.pas',
+  unDBHelper in 'Fontes\unDBHelper.pas',
+  unWorkerHelper in 'Fontes\unWorkerHelper.pas',
+  unHealthHelper in 'Fontes\unHealthHelper.pas',
+  unScheduledHelper in 'Fontes\unScheduledHelper.pas',
   unsmPagamentos in 'Fontes\unsmPagamentos.pas' {smPagamentos: TDSServerModule},
   undmServer in 'Fontes\undmServer.pas' {dmServer: TDataModule},
-  undmModuloWeb in 'Fontes\undmModuloWeb.pas' {dmModuloWeb: TWebModule},
-  unConstantes in 'Fontes\unConstantes.pas',
-  unErroHelper in 'Fontes\unErroHelper.pas',
-  unDBHelper in 'Fontes\unDBHelper.pas',
-  unWorkerHelper in 'Fontes\unWorkerHelper.pas';
+  undmModuloWeb in 'Fontes\undmModuloWeb.pas' {dmModuloWeb: TWebModule};
 
 {$R *.res}
 
@@ -73,7 +78,6 @@ begin
                     else
                         FTipoServico := TTypeService.tsForkingManual;
 
-                    FSobrescreveDefineServico := False;
                     TPosixDaemon.Setup(
                         procedure(ASignal: TPosixSignal)
                         begin
@@ -125,10 +129,6 @@ begin
             end
             else
             begin
-                {$IFDEF LINUX64}
-                FSobrescreveDefineServico := True;
-                {$ENDIF}
-
                 writeln('##############################################');
 
                 {$IFDEF LINUX64}
