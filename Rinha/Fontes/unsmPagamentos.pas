@@ -44,9 +44,12 @@ begin
         ljObj.Free;
     end;
 
-    FilaLogger.LogEntrada(correlationId);
-
     ltReq := TRequisicaoPendente.Create(correlationId, amount, requestedAt);
+
+    // Antes de adicionar o worker talvez seria importante ver quantos itens tem na fila e de alguma forma gerar uma espécie de timeout
+    // minimo para segurar as novas requisições até a fila aliviar novamente
+
+    //LiberaCarga;
 
     AdicionarWorker(ltReq);
 

@@ -13,6 +13,7 @@ type
         error: Boolean;
         attempt: Integer;
         createAt: TDateTime;
+        executeAt: TDateTime;
 
         constructor Create(const AId: string; AAmount: Double; ARequestedAt: String);
     end;
@@ -29,6 +30,7 @@ begin
     error := False;
     attempt := 0;
     createAt := Now;
+    executeAt := Now;
 end;
 
 

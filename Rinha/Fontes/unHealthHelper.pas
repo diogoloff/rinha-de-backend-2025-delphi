@@ -5,14 +5,14 @@ interface
 uses
     System.Classes, System.SysUtils, System.SyncObjs, System.JSON, System.DateUtils,
     IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP,
-    unGenerica, unWorkerHelper, System.Generics.Collections;
+    unGenerica, unWorkerHelper, System.Generics.Collections, System.Math;
 
 type
     TServiceHealthMonitor = class
     private
         FEventoVerificar: TEvent;
         FMonitorLock: TCriticalSection;
-        FDefaultAtivo: Boolean;
+        FDefaultAtivo: Integer;
         FTempoMinimoResposta: Integer;
         FTempoMinimoRespostaPadrao : Integer;
         FTempoMaximoRespostaPadrao : Integer;
@@ -22,13 +22,14 @@ type
         FIdHTTP: TIdHTTP;
         FFilaCongestionada: Integer;
         FUltimoBloqueio: TDateTime;
-        FTamanhoMaximoRetencao: Integer;
+        FQtdeMaxRetencao: Integer;
         FThreadMonitorar: TThread;
 
         procedure ThreadMonitorar;
         procedure ExecutarHealthCheck;
+    function TempoMinimoBloqueioAdaptativo: Double;
     public
-        constructor Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer; const ANumMaxRetain: Integer);
+        constructor Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer; const AQtdeMaxRetain: Integer);
         destructor Destroy; override;
 
         procedure Iniciar;
@@ -41,7 +42,7 @@ type
         function GetFilaCongestionada: Boolean;
         function GetUltimoBloqueio: TDateTime;
         procedure SetDefaultAtivo(const AValue: Boolean);
-        procedure SetTempoMinimoResposta(AValue: Integer);
+        procedure SetTempoMinimoResposta(const AValue: Integer);
         procedure SetFilaCongestionada(const AValue: Boolean);
         procedure SetUltimoBloqueio(const AValue: TDateTime);
         function DeveSairDaContencao: Boolean;
@@ -59,17 +60,17 @@ uses unScheduledHelper;
 
 { TServiceHealthMonitor }
 
-constructor TServiceHealthMonitor.Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer; const ANumMaxRetain: Integer);
+constructor TServiceHealthMonitor.Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer; const AQtdeMaxRetain: Integer);
 begin
     FEventoVerificar := TEvent.Create(nil, False, False, '');
     FMonitorLock := TCriticalSection.Create;
-    FDefaultAtivo := True;
+    FDefaultAtivo := 1;
     FTempoMinimoResposta := AResTimeOut;
     FTempoMinimoRespostaPadrao := AResTimeOut;
     FTempoMaximoRespostaPadrao := AResTimeOut * 2;
-    FUltimaVerificacao := Now;
+    FUltimaVerificacao := IncSecond(Now, -6);
     FHealthURL := AHealthURL;
-    FTamanhoMaximoRetencao := ANumMaxRetain;
+    FQtdeMaxRetencao := AQtdeMaxRetain;
 
     FIdHTTP := TIdHTTP.Create(nil);
     FIdHTTP.ConnectTimeout := AConTimeOut;
@@ -107,6 +108,8 @@ var
             minResponseTime := StrToInt(ljResposta.GetValue('minResponseTime').Value);
             ljResposta.Free;
         end;
+
+        GerarLog('Teste Serviço: F' + BoolToStr(failing, True) + ' T' + IntToStr(minResponseTime));
     end;
 begin
     failing := False;
@@ -135,33 +138,18 @@ begin
 
     FIdHTTP.ReadTimeout := minResponseTime;
 
-    FMonitorLock.Enter;
-    try
-        FDefaultAtivo := not Failing;
-        FTempoMinimoResposta := minResponseTime;
-    finally
-        FMonitorLock.Leave;
-    end;
+    SetDefaultAtivo(not failing);
+    SetTempoMinimoResposta(minResponseTime)
 end;
 
 function TServiceHealthMonitor.GetDefaultAtivo: Boolean;
 begin
-    FMonitorLock.Enter;
-    try
-        Result := FDefaultAtivo;
-    finally
-        FMonitorLock.Leave;
-    end;
+    Result := FDefaultAtivo <> 0;
 end;
 
 procedure TServiceHealthMonitor.SetDefaultAtivo(const AValue: Boolean);
 begin
-    FMonitorLock.Enter;
-    try
-        FDefaultAtivo := AValue;
-    finally
-        FMonitorLock.Leave;
-    end;
+    TInterlocked.Exchange(FDefaultAtivo, Ord(AValue));
 end;
 
 function TServiceHealthMonitor.GetTempoMaximoRespostaPadrao: Integer;
@@ -171,22 +159,12 @@ end;
 
 function TServiceHealthMonitor.GetTempoMinimoResposta: Integer;
 begin
-    FMonitorLock.Enter;
-    try
-        Result := FTempoMinimoResposta;
-    finally
-        FMonitorLock.Leave;
-    end;
+    Result := FTempoMinimoResposta;
 end;
 
-procedure TServiceHealthMonitor.SetTempoMinimoResposta(AValue: Integer);
+procedure TServiceHealthMonitor.SetTempoMinimoResposta(const AValue: Integer);
 begin
-    FMonitorLock.Enter;
-    try
-        FTempoMinimoResposta := AValue;
-    finally
-        FMonitorLock.Leave;
-    end;
+    TInterlocked.Exchange(FTempoMinimoResposta, AValue);
 end;
 
 procedure TServiceHealthMonitor.VerificarSinal;
@@ -260,7 +238,7 @@ begin
         // Verifica se pode sair da contenção
         if (GetFilaCongestionada) then
         begin
-            if DeveSairDaContencao then
+            if (DeveSairDaContencao) then
             begin
                 SetFilaCongestionada(False);
                 GerarLog('Fila descongestionada automaticamente pelo monitor.');
@@ -282,7 +260,7 @@ end;
 
 function TServiceHealthMonitor.GetFilaCongestionada: Boolean;
 begin
-    Result := Boolean(TInterlocked.CompareExchange(Integer(FFilaCongestionada), 0, 0));
+    Result := FFilaCongestionada <> 0;
 end;
 
 procedure TServiceHealthMonitor.SetUltimoBloqueio(const AValue: TDateTime);
@@ -305,17 +283,36 @@ begin
     end;
 end;
 
-function TServiceHealthMonitor.DeveSairDaContencao: Boolean;
+function TServiceHealthMonitor.TempoMinimoBloqueioAdaptativo: Double;
 var
+    lfFatorLatencia, lfFatorWorkers, lfFatorFila: Double;
+    lfTempoBase: Double;
     lLista: TList<TScheduledTask>;
 begin
-    // talvez remover a verificação de tamanho de retenção de fila
+    lfFatorLatencia := Min(1, FTempoMinimoResposta / FTempoMaximoRespostaPadrao);
+    lfFatorWorkers := 1 - Min(1, FilaWorkerManager.QtdeItens / FQtdeMaxRetencao);
+
     lLista := ListaDeAgendamentos.LockList;
     try
-        Result := (SecondsBetween(Now, GetUltimoBloqueio) >= 10) or (lLista.Count > FTamanhoMaximoRetencao);
+        lfFatorFila := Min(1, lLista.Count / FQtdeMaxRetencao);
     finally
         ListaDeAgendamentos.UnlockList;
     end;
+
+    // Tempo base mínimo: 1s | máximo: 3s | Delta 2
+    // Tempo base mínimo: 1s | máximo: 5s | Delta 4
+    // Tempo base mínimo: 1s | máximo: 10s | Delta 9
+    lfTempoBase := 1 + (FDetalAdaptativo * lfFatorLatencia * lfFatorFila * (1 - lfFatorWorkers));
+
+    Result := RoundTo(lfTempoBase, -2);
+end;
+
+function TServiceHealthMonitor.DeveSairDaContencao: Boolean;
+begin
+    Result := (SecondsBetween(Now, GetUltimoBloqueio) >= TempoMinimoBloqueioAdaptativo);
+
+    if (Result) then
+        GerarLog('Fila descongestionada por tempo.');
 end;
 
 procedure IniciarHealthCk;

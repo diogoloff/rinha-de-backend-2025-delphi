@@ -3,14 +3,14 @@
 interface
 
 uses
-  System.SysUtils, System.Classes,
-  FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
-  FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef, FireDAC.Stan.Pool,
-  FireDAC.Stan.Option, Data.DB, unGenerica;
+    System.SysUtils, System.Classes,
+    FireDAC.Comp.Client, FireDAC.Stan.Def, FireDAC.Stan.Async,
+    FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef, FireDAC.Stan.Pool,
+    FireDAC.Stan.Option, Data.DB, unGenerica;
 
-function CriarConexaoFirebird: TFDConnection;
-function ParametrosBanco: TStringList;
-procedure DestruirConexaoFirebird(var lCon: TFDConnection);
+    function CriarConexaoFirebird: TFDConnection;
+    function ParametrosBanco: TStringList;
+    procedure DestruirConexaoFirebird(var lCon: TFDConnection);
 
 implementation
 

@@ -17,18 +17,18 @@ type
 
     TFilaWorkerManager = class
     private
-      FTaskQueue: TQueue<TProc>;
-      FEventoFila: TEvent;
-      FListaWorker: TList<TWorker>;
-      FProcessamentoAtivo: Boolean;
+        FTaskQueue: TQueue<TProc>;
+        FEventoFila: TEvent;
+        FListaWorker: TList<TWorker>;
+        FProcessamentoAtivo: Boolean;
     public
-      constructor Create;
-      destructor Destroy; override;
+        constructor Create;
+        destructor Destroy; override;
 
-      procedure EnfileirarTarefa(const ATarefa: TProc);
-      procedure Finalizar;
-      procedure Iniciar(const AQtdeWorkers: Integer);
-      function QtdeItens: Integer;
+        procedure EnfileirarTarefa(const ATarefa: TProc);
+        procedure Finalizar;
+        procedure Iniciar(const AQtdeWorkers: Integer);
+        function QtdeItens: Integer;
     end;
 
     procedure IniciarWorkers;
@@ -36,8 +36,7 @@ type
 
 var
     FilaWorkerManager: TFilaWorkerManager;
-    //FilaWorkerLater: TFilaWorkerManager;
-    //FilaWorkerReprocess: TFilaWorkerManager;
+    FilaWorkerProcess: TFilaWorkerManager;
     FilaWorkerSave: TFilaWorkerManager;
 
 implementation
@@ -64,7 +63,7 @@ begin
     inherited Create;
 
     FTaskQueue := TQueue<TProc>.Create;
-    FEventoFila := TEvent.Create(nil, False, False, '');
+    FEventoFila := TEvent.Create(nil, True, False, '');   // colocado para reset manual
     FListaWorker := TList<TWorker>.Create;
     FProcessamentoAtivo := False;
 end;
@@ -81,16 +80,20 @@ begin
 end;
 
 procedure TFilaWorkerManager.EnfileirarTarefa(const ATarefa: TProc);
+var
+    lbAcordar: Boolean;
 begin
     TMonitor.Enter(FTaskQueue);
     try
+        lbAcordar := FTaskQueue.Count = 0;
         FTaskQueue.Enqueue(ATarefa);
     finally
         TMonitor.Exit(FTaskQueue);
     end;
 
     // Avisa os workers que tem trabalho
-    FEventoFila.SetEvent;
+    if lbAcordar then
+        FEventoFila.SetEvent;
 end;
 
 procedure TFilaWorkerManager.Finalizar;
@@ -132,11 +135,18 @@ begin
         begin
             while not TThread.CurrentThread.CheckTerminated do
             begin
-                // Aguarda evento até ser sinalizado
-                FEventoFila.WaitFor(1000);
-
                 if not FProcessamentoAtivo then
                     Break;
+
+                if FTaskQueue.Count = 0 then
+                begin
+                    // Se não tem nada pra fazer, espera um pouco
+                    FEventoFila.WaitFor(50);
+                    Continue;
+                end;
+
+                // Aguarda evento até ser sinalizado
+                //FEventoFila.WaitFor(1000);
 
                 TMonitor.Enter(FTaskQueue);
                 try
@@ -149,7 +159,21 @@ begin
                 end;
 
                 if Assigned(lTarefa) then
-                    lTarefa;
+                begin
+                    try
+                        lTarefa;
+                    except
+                        on E: Exception do
+                        begin
+                            // Logar falha da tarefa aqui, se necessário
+                            GerarLog(PChar('Erro: ' + E.Message));
+                        end;
+                    end;
+                end;
+
+                // Se a fila estiver vazia, resetamos o evento manualmente
+                if FTaskQueue.Count = 0 then
+                    FEventoFila.ResetEvent;
             end;
         end));
     end;
@@ -167,17 +191,13 @@ end;
 
 procedure IniciarWorkers;
 begin
-    // Fila normal
+    // Fila para organização das requisições
     FilaWorkerManager := TFilaWorkerManager.Create;
     FilaWorkerManager.Iniciar(FNumMaxWorkers);
 
-    // Fila para delay de reprocessamento, aqui gera um atraso
-    //FilaWorkerLater := TFilaWorkerManager.Create;
-    //FilaWorkerLater.Iniciar(FNumMaxWorkers);
-
-    // Fila para reprocessamento
-    //FilaWorkerReprocess := TFilaWorkerManager.Create;
-    //FilaWorkerReprocess.Iniciar(FNumMaxWorkers);
+    // Fila para processamento
+    FilaWorkerProcess := TFilaWorkerManager.Create;
+    FilaWorkerProcess.Iniciar(FNumMaxWorkers);
 
     // Fila exclusiva para salvar no banco de dados, usada no normal e reprocessametno
     FilaWorkerSave := TFilaWorkerManager.Create;
@@ -189,11 +209,8 @@ begin
     if (Assigned(FilaWorkerManager)) then
         FilaWorkerManager.Free;
 
-    //if (Assigned(FilaWorkerLater)) then
-    //    FilaWorkerLater.Free;
-
-    //if (Assigned(FilaWorkerReprocess)) then
-    //    FilaWorkerReprocess.Free;
+    if (Assigned(FilaWorkerProcess)) then
+        FilaWorkerProcess.Free;
 
     if (Assigned(FilaWorkerSave)) then
         FilaWorkerSave.Free;

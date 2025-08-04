@@ -3,7 +3,7 @@
 interface
 
 uses
-    System.SysUtils, System.Classes, System.SyncObjs, System.Generics.Collections, System.IOUtils, System.TypInfo, System.DateUtils;
+    System.SysUtils, System.Classes, System.SyncObjs, System.Generics.Collections, System.IOUtils, System.TypInfo, System.DateUtils, unGenerica;
 
 type
     TStatusFila = (sfSucesso, sfTimeout, sfErro500, sfErroDesconhecido, sfDescartado, sfSalvo);
@@ -76,6 +76,9 @@ procedure TFilaLogger.LogEntrada(const AID: string);
 var
     Entry: TFilaLogEntry;
 begin
+    if (not FDebug) then
+        Exit;
+
     if FLog.ContainsKey(AID) then
     begin
         Entry := FLog[AID];
@@ -95,6 +98,9 @@ procedure TFilaLogger.LogExecucao(const AID: string; AStatus: TStatusFila; ALate
 var
     Entry: TFilaLogEntry;
 begin
+    if (not FDebug) then
+        Exit;
+
     if FLog.TryGetValue(AID, Entry) then
     begin
         if (AStatus = sfDescartado) then

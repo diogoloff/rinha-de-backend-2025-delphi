@@ -29,6 +29,7 @@ var
     FResTimeOut: Integer;
     FNumMaxRetain: Integer;
     FNumMaxWorkers: Integer;
+    FDetalAdaptativo: Integer;
 
 implementation
 
@@ -75,8 +76,27 @@ begin
     FConTimeOut := StrToIntDef(GetEnv('CON_TIME_OUT', ''), 50);
     FReadTimeOut := StrToIntDef(GetEnv('READ_TIME_OUT', ''), 3500);
     FResTimeOut := StrToIntDef(GetEnv('RES_TIME_OUT', ''), 200);
-    FNumMaxRetain := StrToIntDef(GetEnv('NUM_MAX_RETAIN', ''), 500);
-    FNumMaxWorkers := StrToIntDef(GetEnv('NUM_WORKERS', ''), 1000);
+    FNumMaxRetain := StrToIntDef(GetEnv('QTDE_MAX_RETAIN', ''), 500);
+    FNumMaxWorkers := StrToIntDef(GetEnv('NUM_WORKERS', ''), 2);
+    FDetalAdaptativo := StrToIntDef(GetEnv('DELTA', ''), 4);
+
+     if (FConTimeOut < 10) or (FConTimeOut > 100) then
+        FConTimeOut := 50;
+
+    if (FReadTimeOut < 100) or (FReadTimeOut > 5000) then
+        FReadTimeOut := 3000;
+
+    if (FResTimeOut < 100) or (FResTimeOut > 5000) then
+        FResTimeOut := 1000;
+
+    if (FNumMaxRetain < 100) or (FNumMaxRetain > 1000) then
+        FNumMaxRetain := 250;
+
+    if (FNumMaxWorkers < 2) or (FNumMaxWorkers > 2000) then
+        FNumMaxWorkers := 2;
+
+    if (FDetalAdaptativo < 1) or (FDetalAdaptativo > 9) then
+        FDetalAdaptativo := 4;
 end;
 
 initialization

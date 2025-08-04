@@ -193,6 +193,18 @@ begin
     else
         GerarLog(sServerRunning);
 
+    GerarLog('Configuração do Ambiente');
+    GerarLog('==================================');
+    GerarLog('(DEBUG) Debug Ativo: ' + BoolToStr(FDebug, True));
+    GerarLog('(DEFAULT_URL) Url Default: ' + FUrl);
+    GerarLog('(FALLBACK_URL) Url Fallback: ' + FUrlFall);
+    GerarLog('(CON_TIME_OUT) Timeout Conexão: ' + IntToStr(FConTimeOut));
+    GerarLog('(READ_TIME_OUT) Timeout Retorno Health: ' + IntToStr(FReadTimeOut));
+    GerarLog('(RES_TIME_OUT) Timeout Padrão Processamento: ' + IntToStr(FResTimeOut));
+    GerarLog('(QTDE_MAX_RETAIN) Quantidade Maxima de Itens para Ativar Retenção: ' + IntToStr(FNumMaxRetain));
+    GerarLog('(NUM_WORKERS) Quantidade de Workers: ' + IntToStr(FNumMaxWorkers));
+    GerarLog('(DELTA) Delta Adaptativo: ' + IntToStr(FDetalAdaptativo));
+
     GerarLog(cArrow);
 end;
 
