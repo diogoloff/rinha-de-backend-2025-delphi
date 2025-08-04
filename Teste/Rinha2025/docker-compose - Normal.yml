@@ -1,11 +1,26 @@
 services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: rinha-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api1
+      - api2
+    ports:
+      - "9999:9999"
+    networks:
+      - backend-rinha
+      - payment-processor
+    #deploy:
+    #  resources:
+    #    limits:
+    #      cpus: "0.20"
+    #      memory: "15MB"
+
   api1: &api
     image: diogoloff/rinha2025-minimo:latest
-    depends_on:
-      - firebird
     hostname: api1
-    ports:
-      - "9999:8080"
     environment:
       - DEFAULT_URL=http://payment-processor-default:8080
       - FALLBACK_URL=http://payment-processor-fallback:8080
@@ -14,18 +29,31 @@ services:
       - DB_PASS=masterkey
       - DB_HOST=firebird
       - DB_PORT=3050
-      - CON_TIME_OUT=5000
-      - READ_TIME_OUT=3000
-      - RES_TIME_OUT=1000
-      - QTDE_MAX_RETAIN=100
-      - NUM_WORKERS=2
-      - DELTA=2
+      - CON_TIME_OUT=50
+      - READ_TIME_OUT=100
+      - RES_TIME_OUT=200
+      - NUM_WORKERS=10
       - DEBUG=S
-    volumes:
-      - ./Logs/:/opt/rinha/Logs/
     networks:
       - backend-rinha
       - payment-processor	
+
+  api2:
+    <<: *api
+    hostname: api2
+    environment:
+      - DEFAULT_URL=http://payment-processor-default:8080
+      - FALLBACK_URL=http://payment-processor-fallback:8080
+      - DB_NAME=banco.fdb
+      - DB_USER=SYSDBA
+      - DB_PASS=masterkey
+      - DB_HOST=firebird
+      - DB_PORT=3050
+      - CON_TIME_OUT=50
+      - READ_TIME_OUT=100
+      - RES_TIME_OUT=200
+      - NUM_WORKERS=10
+      - DEBUG=S
 
   firebird:
     image: firebirdsql/firebird
@@ -43,6 +71,11 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - backend-rinha
+    #deploy:
+    #  resources:
+    #    limits:
+    #      cpus: "0.50"
+    #      memory: "160MB"
 
 networks:
   backend-rinha:
