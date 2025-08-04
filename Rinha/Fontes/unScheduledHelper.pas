@@ -20,17 +20,6 @@ type
         AReq: TRequisicaoPendente;
     end;
 
-    TScheduler = class
-    private
-        FTasks: TList<TScheduledTask>;
-    public
-        constructor Create;
-        destructor Destroy; override;
-
-        //procedure Agendar(const AReq: TRequisicaoPendente; const ASegundos: Integer);
-        //procedure ExecutarTarefasPendentes;
-    end;
-
     procedure IniciarScheduled;
     procedure FinalizarScheduled;
 
@@ -39,59 +28,15 @@ type
     procedure AdicionarWorkerGravacao(const AReq : TRequisicaoPendente; const ADefault: Boolean);
     procedure ProcessarRequisicao(const AReq: TRequisicaoPendente);
     procedure Agendar(const AReq: TRequisicaoPendente);
-    procedure AgendarReprocessamento(const AReq: TRequisicaoPendente);
-    procedure LiberaCarga;
+    //procedure AgendarReprocessamento(const AReq: TRequisicaoPendente);
 
 var
     ListaDeAgendamentos: TThreadList<TScheduledTask>;
-    ListaDeReAgendamentos: TThreadList<TScheduledTask>;
+    //ListaDeReAgendamentos: TThreadList<TScheduledTask>;
     RodarAgendamentos: TWorker;
-    RodarReAgendamentos: TWorker;
+    //RodarReAgendamentos: TWorker;
 
 implementation
-
-{ TScheduler }
-
-constructor TScheduler.Create;
-begin
-    FTasks := TList<TScheduledTask>.Create;
-end;
-
-destructor TScheduler.Destroy;
-begin
-    FTasks.Free;
-    inherited;
-end;
-
-function GetCargaTotalFilas: Integer;
-begin
-    try
-        Result := ListaDeAgendamentos.LockList.Count + ListaDeReAgendamentos.LockList.Count;
-    finally
-        ListaDeAgendamentos.UnlockList;
-        ListaDeReAgendamentos.UnlockList;
-    end;
-end;
-
-procedure LiberaCarga;
-var
-    Carga: Integer;
-begin
-    try
-        Carga := GetCargaTotalFilas;
-
-        if Carga >= FNumMaxRetain then
-        begin
-            GerarLog(Format('Carga excessiva (%d itens): aguardando...', [Carga]));
-            Sleep(5 + (Carga div 10)); // atraso proporcional à carga
-        end;
-    except
-        on E : Exception do
-        begin
-            GerarLog(E.Message);
-        end;
-    end;
-end;
 
 function EnviarParaProcessar(const AReq: TRequisicaoPendente; const lbDefaultProcessor: Boolean): Boolean;
 var
@@ -101,10 +46,10 @@ var
     lStream: TStringStream;
     IdHTTPPagamentos: TIdHTTP;
     liTempoMinimoResposta: Integer;
-
-    StartTick: Integer;
-    TempoTotalMs: Integer;
 begin
+    // Este cara seria obrigatorio ser setado por requisição
+    //FIdHTTP.ReadTimeout         := liTempoMinimoResposta;
+
     Result := False;
     liTempoMinimoResposta := ServiceHealthMonitor.GetTempoMinimoResposta;
 
@@ -120,7 +65,6 @@ begin
 
         ljEnviar := TJSONObject.Create;
         lStream  := nil;
-        StartTick := TThread.GetTickCount;
         try
             try
                 // Monta o corpo JSON
@@ -136,41 +80,12 @@ begin
                         lsURL,
                         lStream
                     );
-                TempoTotalMs := TThread.GetTickCount - StartTick;
-
-                FilaLogger.LogExecucao(AReq.correlationId, sfSucesso, TempoTotalMs);
-
-                // Sinaliza alta latencia
-                if (TempoTotalMs > ServiceHealthMonitor.GetTempoMaximoRespostaPadrao) then
-                begin
-                    GerarLog('Timeout: ' + IntToStr(TempoTotalMs));
-                    ServiceHealthMonitor.SetFilaCongestionada(True);
-                end
-                else
-                    ServiceHealthMonitor.SetFilaCongestionada(False);
-
-                GerarLog('Tentativa: ' + IntToStr(AReq.attempt) + ' - Efetuada: ' +  AReq.correlationId);
 
                 Result := True;
             except
-                on E: EIdHTTPProtocolException do
-                begin
-                    TempoTotalMs := TThread.GetTickCount - StartTick;
-                    FilaLogger.LogExecucao(AReq.correlationId, sfErro500, TempoTotalMs);
-
-                    ServiceHealthMonitor.SetFilaCongestionada(True);
-                end;
-
                 on E: Exception do
                 begin
-                    TempoTotalMs := TThread.GetTickCount - StartTick;
-                    if (E.ClassName = 'EIdReadTimeout') then
-                        FilaLogger.LogExecucao(AReq.correlationId, sfTimeout, TempoTotalMs)
-                    else
-                        FilaLogger.LogExecucao(AReq.correlationId, sfErroDesconhecido, TempoTotalMs);
-
-                    GerarLog('EIdReadTimeout: ' + IntToStr(TempoTotalMs));
-                    ServiceHealthMonitor.SetFilaCongestionada(True);
+                    GerarLog('Erro Processar: ' + E.Message);
                 end;
             end;
         finally
@@ -236,18 +151,6 @@ begin
 
     if AReq.attempt < 10 then
     begin
-        {if ServiceHealthMonitor.GetFilaCongestionada then
-        begin
-            if (ServiceHealthMonitor.DeveSairDaContencao) then
-                ServiceHealthMonitor.SetFilaCongestionada(False)
-            else
-            begin
-                AdicionarWorkerReprocesso(AReq);
-
-                Exit;
-            end;
-        end;  }
-
         if (EnviarParaProcessar(AReq, lbDefault)) then
         begin
             AdicionarWorkerGravacao(AReq, lbDefault);
@@ -267,11 +170,18 @@ procedure AdicionarWorker(const AReq : TRequisicaoPendente);
 begin
     // Tirei a questão de jogar para a fila e fazer diretamente com worker
     // Ter fila somente para as segundas tentativas
-    FilaWorkerManager.EnfileirarTarefa(
+    {FilaWorkerManager.EnfileirarTarefa(
     procedure
     begin
         ProcessarRequisicao(AReq);
         //Agendar(AReq);
+    end); }
+
+    FilaWorkerManager.EnfileirarTarefa(
+    procedure
+    begin
+        //ProcessarRequisicao(AReq);
+        Agendar(AReq);
     end);
 end;
 
@@ -280,7 +190,7 @@ begin
     FilaWorkerManager.EnfileirarTarefa(
     procedure
     begin
-        AgendarReprocessamento(AReq);
+        Agendar(AReq);
     end);
 end;
 
@@ -317,7 +227,12 @@ var
     lTask: TScheduledTask;
 begin
     FilaLogger.LogEntrada(AReq.correlationId);
-    lTask.ExecuteAt := Now;
+
+    if (AReq.attempt = 0) then
+        lTask.ExecuteAt := Now
+    else
+        lTask.ExecuteAt := IncSecond(Now, CalcularTempoAdaptativo(AReq));
+
     lTask.AReq := AReq;
     Inc(lTask.AReq.attempt);
 
@@ -329,7 +244,7 @@ begin
     end;
 end;
 
-procedure AgendarReprocessamento(const AReq: TRequisicaoPendente);
+{procedure AgendarReprocessamento(const AReq: TRequisicaoPendente);
 var
     lLista: TList<TScheduledTask>;
     lTask: TScheduledTask;
@@ -345,7 +260,7 @@ begin
     finally
         ListaDeReAgendamentos.UnlockList;
     end;
-end;
+end;  }
 
 procedure ExecutarAgendamentos;
 var
@@ -367,7 +282,7 @@ begin
     end;
 end;
 
-procedure ExecutarReAgendamentos;
+{procedure ExecutarReAgendamentos;
 var
     Lista: TList<TScheduledTask>;
     I: Integer;
@@ -385,12 +300,12 @@ begin
     finally
         ListaDeReAgendamentos.UnlockList;
     end;
-end;
+end;  }
 
 procedure IniciarScheduled;
 begin
     ListaDeAgendamentos := TThreadList<TScheduledTask>.Create;
-    ListaDeReAgendamentos := TThreadList<TScheduledTask>.Create;
+    //ListaDeReAgendamentos := TThreadList<TScheduledTask>.Create;
 
     RodarAgendamentos := TWorker.Create(
     procedure
@@ -402,7 +317,7 @@ begin
         end;
     end);
 
-    RodarReAgendamentos := TWorker.Create(
+    {RodarReAgendamentos := TWorker.Create(
     procedure
     begin
         while not TThread.CurrentThread.CheckTerminated do
@@ -410,7 +325,7 @@ begin
             ExecutarReAgendamentos;
             Sleep(500);
         end;
-    end);
+    end); }
 end;
 
 procedure FinalizarScheduled;
@@ -424,14 +339,14 @@ begin
 
     ListaDeAgendamentos.Free;
 
-    if Assigned(RodarReAgendamentos) then
+    {if Assigned(RodarReAgendamentos) then
     begin
         RodarReAgendamentos.Terminate;
         RodarReAgendamentos.WaitFor;
         RodarReAgendamentos.Free;
     end;
 
-    ListaDeReAgendamentos.Free;
+    ListaDeReAgendamentos.Free;   }
 end;
 
 end.

@@ -3,16 +3,19 @@
 interface
 
 uses
-    System.SysUtils, System.Classes, System.SyncObjs, System.Generics.Collections, unGenerica;
+    System.SysUtils, System.Classes, System.SyncObjs, System.Generics.Collections, unGenerica,
+    IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP;
 
 type
     TWorker = class(TThread)
     private
+        FIdHTTP: TIdHTTP;
         FExecutar: TProc;
     protected
         procedure Execute; override;
     public
-        constructor Create(const AProc: TProc);
+        constructor Create(const AProc: TProc; ACriarHTTP: Boolean = False);
+        destructor Destroy; override;
     end;
 
     TFilaWorkerManager = class
@@ -43,11 +46,27 @@ implementation
 
 { TWorker }
 
-constructor TWorker.Create(const AProc: TProc);
+constructor TWorker.Create(const AProc: TProc; ACriarHTTP: Boolean = False);
 begin
     inherited Create(False);
     FreeOnTerminate := False;
+
+    if (ACriarHTTP) then
+    begin
+        FIdHTTP := TIdHTTP.Create(nil);
+        FIdHTTP.ConnectTimeout      := FConTimeOut;
+        FIdHTTP.Request.ContentType := 'application/json';
+    end;
+    
     FExecutar := AProc;
+end;
+
+destructor TWorker.Destroy;
+begin
+    if (Assigned(FIdHTTP)) then
+        FIdHTTP.Free;
+
+    inherited;
 end;
 
 procedure TWorker.Execute;

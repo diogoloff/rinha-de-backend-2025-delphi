@@ -20,14 +20,14 @@ type
         FHealthURL: string;
         FMonitoramentoAtivo: Boolean;
         FIdHTTP: TIdHTTP;
-        FFilaCongestionada: Integer;
-        FUltimoBloqueio: TDateTime;
+        //FFilaCongestionada: Integer;
+        //FUltimoBloqueio: TDateTime;
         FQtdeMaxRetencao: Integer;
         FThreadMonitorar: TThread;
 
         procedure ThreadMonitorar;
         procedure ExecutarHealthCheck;
-    function TempoMinimoBloqueioAdaptativo: Double;
+        //function TempoMinimoBloqueioAdaptativo: Double;
     public
         constructor Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer; const AQtdeMaxRetain: Integer);
         destructor Destroy; override;
@@ -39,13 +39,13 @@ type
         function GetDefaultAtivo: Boolean;
         function GetTempoMinimoResposta: Integer;
         function GetTempoMaximoRespostaPadrao: Integer;
-        function GetFilaCongestionada: Boolean;
-        function GetUltimoBloqueio: TDateTime;
+        //function GetFilaCongestionada: Boolean;
+        //function GetUltimoBloqueio: TDateTime;
         procedure SetDefaultAtivo(const AValue: Boolean);
         procedure SetTempoMinimoResposta(const AValue: Integer);
-        procedure SetFilaCongestionada(const AValue: Boolean);
-        procedure SetUltimoBloqueio(const AValue: TDateTime);
-        function DeveSairDaContencao: Boolean;
+        //procedure SetFilaCongestionada(const AValue: Boolean);
+        //procedure SetUltimoBloqueio(const AValue: TDateTime);
+        //function DeveSairDaContencao: Boolean;
     end;
 
     procedure IniciarHealthCk;
@@ -236,18 +236,18 @@ begin
         end;
 
         // Verifica se pode sair da contenção
-        if (GetFilaCongestionada) then
+        {if (GetFilaCongestionada) then
         begin
             if (DeveSairDaContencao) then
             begin
                 SetFilaCongestionada(False);
                 GerarLog('Fila descongestionada automaticamente pelo monitor.');
             end;
-        end;
+        end;}
     end;
 end;
 
-procedure TServiceHealthMonitor.SetFilaCongestionada(const AValue: Boolean);
+{procedure TServiceHealthMonitor.SetFilaCongestionada(const AValue: Boolean);
 begin
     TInterlocked.Exchange(Integer(FFilaCongestionada), Ord(AValue));
 
@@ -313,7 +313,7 @@ begin
 
     if (Result) then
         GerarLog('Fila descongestionada por tempo.');
-end;
+end;}
 
 procedure IniciarHealthCk;
 begin
