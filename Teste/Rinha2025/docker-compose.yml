@@ -18,7 +18,7 @@ services:
       - READ_TIME_OUT=3000
       - RES_TIME_OUT=1000
       - QTDE_MAX_RETAIN=100
-      - NUM_WORKERS=26
+      - NUM_WORKERS=2
       - DELTA=2
       - DEBUG=N
     volumes:
