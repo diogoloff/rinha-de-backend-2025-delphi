@@ -3,34 +3,81 @@
 interface
 
 uses
-    System.SysUtils, System.Classes, System.SyncObjs, System.Generics.Collections, unGenerica,
-    IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP;
+    System.SysUtils, System.Classes, System.SyncObjs, System.Generics.Collections, System.DateUtils,
+    IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP,
+
+    FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
+    FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.ConsoleUI.Wait, Data.DB, FireDAC.Comp.Client,
+    FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf, FireDAC.DApt, FireDAC.Comp.DataSet,
+
+    unGenerica, unDBHelper;
 
 type
-    TWorker = class(TThread)
-    private
-        FIdHTTP: TIdHTTP;
-        FExecutar: TProc;
+    TWorkerBase = class(TThread)
     protected
-        procedure Execute; override;
-    public
-        constructor Create(const AProc: TProc; ACriarHTTP: Boolean = False);
-        destructor Destroy; override;
-    end;
-
-    TFilaWorkerManager = class
-    private
+        FExecutar: TProc;
         FTaskQueue: TQueue<TProc>;
         FEventoFila: TEvent;
-        FListaWorker: TList<TWorker>;
         FProcessamentoAtivo: Boolean;
+
+        procedure Execute; override;
     public
         constructor Create;
         destructor Destroy; override;
 
         procedure EnfileirarTarefa(const ATarefa: TProc);
         procedure Finalizar;
+        procedure SetarTarefa(const AProc: TProc);
+        function QtdeItens: Integer;
+    end;
+
+    TWorker = class(TWorkerBase)
+    public
+        constructor Create;
+    end;
+
+    TWorkerRequest = class(TWorkerBase)
+    private
+        FIdHTTP: TIdHTTP;
+        FCon: TFDConnection;
+        FQuery: TFDQuery;
+        FUltimoUsoBD: TDateTime;
+    public
+        constructor Create;
+        destructor Destroy; override;
+        procedure GarantirConexaoBD;
+        procedure VerificarExpiracaoConexaoBD;
+
+        property IdHTTP: TIdHTTP read FIdHTTP;
+        property Con: TFDConnection read FCon;
+        property Query: TFDQuery read FQuery;
+    end;
+
+    TFilaWorkerManager = class
+    private
+        FListaWorker: TList<TWorker>;
+        FProcessamentoAtivo: Boolean;
+    public
+        constructor Create;
+        destructor Destroy; override;
+
         procedure Iniciar(const AQtdeWorkers: Integer);
+        procedure Finalizar;
+        procedure EnfileirarTarefa(const ATarefa: TProc);
+        function QtdeItens: Integer;
+    end;
+
+    TFilaWorkerRequest = class
+    private
+        FListaWorker: TList<TWorkerRequest>;
+        FProcessamentoAtivo: Boolean;
+    public
+        constructor Create;
+        destructor Destroy; override;
+
+        procedure Iniciar(const AQtdeWorkers: Integer);
+        procedure Finalizar;
+        procedure EnfileirarTarefa(const ATarefa: TProc);
         function QtdeItens: Integer;
     end;
 
@@ -38,67 +85,51 @@ type
     procedure FinalizarWorkers;
 
 var
-    FilaWorkerManager: TFilaWorkerManager;
-    FilaWorkerProcess: TFilaWorkerManager;
-    FilaWorkerSave: TFilaWorkerManager;
+    FilaWorkerManager : TFilaWorkerManager;
+    FilaWorkerRequest : TFilaWorkerRequest;
 
 implementation
 
-{ TWorker }
+procedure IniciarWorkers;
+begin
+    // Fila para organização das requisições
+    FilaWorkerManager := TFilaWorkerManager.Create;
+    FilaWorkerManager.Iniciar(FNumMaxWorkers);
 
-constructor TWorker.Create(const AProc: TProc; ACriarHTTP: Boolean = False);
+    FilaWorkerRequest := TFilaWorkerRequest.Create;
+    FilaWorkerRequest.Iniciar(FNumMaxWorkers);
+end;
+
+procedure FinalizarWorkers;
+begin
+    if (Assigned(FilaWorkerManager)) then
+        FilaWorkerManager.Free;
+
+    if (Assigned(FilaWorkerRequest)) then
+        FilaWorkerRequest.Free;
+end;
+
+{ TWorkerBase }
+
+constructor TWorkerBase.Create;
 begin
     inherited Create(False);
     FreeOnTerminate := False;
 
-    if (ACriarHTTP) then
-    begin
-        FIdHTTP := TIdHTTP.Create(nil);
-        FIdHTTP.ConnectTimeout      := FConTimeOut;
-        FIdHTTP.Request.ContentType := 'application/json';
-    end;
-    
-    FExecutar := AProc;
-end;
-
-destructor TWorker.Destroy;
-begin
-    if (Assigned(FIdHTTP)) then
-        FIdHTTP.Free;
-
-    inherited;
-end;
-
-procedure TWorker.Execute;
-begin
-    if Assigned(FExecutar) then
-        FExecutar;
-end;
-
-{ TFilaWorkerManager }
-
-constructor TFilaWorkerManager.Create;
-begin
-    inherited Create;
-
     FTaskQueue := TQueue<TProc>.Create;
-    FEventoFila := TEvent.Create(nil, True, False, '');   // colocado para reset manual
-    FListaWorker := TList<TWorker>.Create;
-    FProcessamentoAtivo := False;
+    FEventoFila := TEvent.Create(nil, True, False, '');
+    FProcessamentoAtivo := True;
 end;
 
-destructor TFilaWorkerManager.Destroy;
+destructor TWorkerBase.Destroy;
 begin
     Finalizar;
-
-    FListaWorker.Free;
     FEventoFila.Free;
     FTaskQueue.Free;
-
     inherited;
 end;
 
-procedure TFilaWorkerManager.EnfileirarTarefa(const ATarefa: TProc);
+procedure TWorkerBase.EnfileirarTarefa(const ATarefa: TProc);
 var
     lbAcordar: Boolean;
 begin
@@ -110,95 +141,63 @@ begin
         TMonitor.Exit(FTaskQueue);
     end;
 
-    // Avisa os workers que tem trabalho
     if lbAcordar then
         FEventoFila.SetEvent;
 end;
 
-procedure TFilaWorkerManager.Finalizar;
+procedure TWorkerBase.Execute;
 var
-    Worker: TWorker;
+    lTarefa: TProc;
+begin
+    while not Terminated do
+    begin
+        if not FProcessamentoAtivo then
+            Break;
+
+        if FTaskQueue.Count = 0 then
+        begin
+            FEventoFila.WaitFor(50);
+
+            if Self is TWorkerRequest then
+                TWorkerRequest(Self).VerificarExpiracaoConexaoBD;
+
+            Continue;
+        end;
+
+        TMonitor.Enter(FTaskQueue);
+        try
+            if FTaskQueue.Count > 0 then
+                lTarefa := FTaskQueue.Dequeue()
+            else
+                lTarefa := nil;
+        finally
+            TMonitor.Exit(FTaskQueue);
+        end;
+
+        if Assigned(lTarefa) then
+        begin
+            try
+                lTarefa;
+            except
+                on E: Exception do
+                    GerarLog(PChar('Erro: ' + E.Message));
+            end;
+        end;
+
+        if FTaskQueue.Count = 0 then
+            FEventoFila.ResetEvent;
+    end;
+end;
+
+procedure TWorkerBase.Finalizar;
 begin
     FProcessamentoAtivo := False;
-
-    // Sinaliza os workers pra que eles possam sair do wait
     FEventoFila.SetEvent;
-
-    // Termina cada worker da forma correta
-    for Worker in FListaWorker do
-    begin
-        Worker.Terminate;
-        Worker.WaitFor;
-        Worker.Free;
-    end;
-
-    FListaWorker.Clear;
+    Terminate;
+    WaitFor;
 end;
 
-procedure TFilaWorkerManager.Iniciar(const AQtdeWorkers: Integer);
-var
-    I: Integer;
-begin
-    if FProcessamentoAtivo then
-        Exit;
-
-    FProcessamentoAtivo := True;
-
-    for I := 1 to AQtdeWorkers do
-    begin
-        FListaWorker.Add(
-        TWorker.Create(
-        procedure
-        var
-            lTarefa: TProc;
-        begin
-            while not TThread.CurrentThread.CheckTerminated do
-            begin
-                if not FProcessamentoAtivo then
-                    Break;
-
-                if FTaskQueue.Count = 0 then
-                begin
-                    // Se não tem nada pra fazer, espera um pouco
-                    FEventoFila.WaitFor(50);
-                    Continue;
-                end;
-
-                // Aguarda evento até ser sinalizado
-                //FEventoFila.WaitFor(1000);
-
-                TMonitor.Enter(FTaskQueue);
-                try
-                    if FTaskQueue.Count > 0 then
-                        lTarefa := FTaskQueue.Dequeue()
-                    else
-                        lTarefa := nil;
-                finally
-                    TMonitor.Exit(FTaskQueue);
-                end;
-
-                if Assigned(lTarefa) then
-                begin
-                    try
-                        lTarefa;
-                    except
-                        on E: Exception do
-                        begin
-                            // Logar falha da tarefa aqui, se necessário
-                            GerarLog(PChar('Erro: ' + E.Message));
-                        end;
-                    end;
-                end;
-
-                // Se a fila estiver vazia, resetamos o evento manualmente
-                if FTaskQueue.Count = 0 then
-                    FEventoFila.ResetEvent;
-            end;
-        end));
-    end;
-end;
-
-function TFilaWorkerManager.QtdeItens: Integer;
+function TWorkerBase.QtdeItens: Integer;
 begin
     TMonitor.Enter(FTaskQueue);
     try
@@ -208,31 +207,239 @@ begin
     end;
 end;
 
-procedure IniciarWorkers;
+procedure TWorkerBase.SetarTarefa(const AProc: TProc);
 begin
-    // Fila para organização das requisições
-    FilaWorkerManager := TFilaWorkerManager.Create;
-    FilaWorkerManager.Iniciar(FNumMaxWorkers);
-
-    // Fila para processamento
-    FilaWorkerProcess := TFilaWorkerManager.Create;
-    FilaWorkerProcess.Iniciar(FNumMaxWorkers);
-
-    // Fila exclusiva para salvar no banco de dados, usada no normal e reprocessametno
-    FilaWorkerSave := TFilaWorkerManager.Create;
-    FilaWorkerSave.Iniciar(FNumMaxWorkers);     // aqui tava *2
+    FExecutar := AProc;
+    EnfileirarTarefa(FExecutar);
 end;
 
-procedure FinalizarWorkers;
+{ TWorker }
+
+constructor TWorker.Create;
 begin
-    if (Assigned(FilaWorkerManager)) then
-        FilaWorkerManager.Free;
+    inherited Create;
+end;
 
-    if (Assigned(FilaWorkerProcess)) then
-        FilaWorkerProcess.Free;
+{ TWorkerRequest }
 
-    if (Assigned(FilaWorkerSave)) then
-        FilaWorkerSave.Free;
+constructor TWorkerRequest.Create;
+begin
+    inherited Create;
+    FIdHTTP := TIdHTTP.Create(nil);
+    FIdHTTP.ConnectTimeout := FConTimeOut;
+    FIdHTTP.ReadTimeout := FReadTimeOut;
+    FIdHTTP.Request.ContentType := 'application/json';
+
+    FCon := TFDConnection.Create(nil);
+    PreparaConexaoFirebird(FCon);
+
+    FQuery := TFDQuery.Create(nil);
+    FQuery.Connection := FCon;
+    FQuery.SQL.Text := 'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) ' +
+                       'values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
+end;
+
+destructor TWorkerRequest.Destroy;
+begin
+    if (FCon.Connected) then
+        FCon.Close;
+
+    FIdHTTP.Free;
+    FQuery.Free;
+    FCon.Free;
+
+    inherited;
+end;
+
+procedure TWorkerRequest.GarantirConexaoBD;
+begin
+    if (not FCon.Connected) then
+    begin
+        try
+            FCon.Open;
+            GerarLog('Conexão aberta pelo worker');
+        except
+            on E: Exception do
+            begin
+                GerarLog('Erro ao abrir conexão: ' + E.Message);
+            end;
+        end;
+    end;
+
+    FUltimoUsoBD := Now;
+end;
+
+procedure TWorkerRequest.VerificarExpiracaoConexaoBD;
+begin
+    if FCon.Connected then
+    begin
+        if MinutesBetween(Now, FUltimoUsoBD) > 2 then
+        begin
+            try
+                FCon.Close;
+                GerarLog('Conexão encerrada por inatividade');
+            except
+                on E: Exception do
+                begin
+                    GerarLog('Erro ao fechar conexão: ' + E.Message);
+                end;
+            end;
+        end;
+    end;
+end;
+
+{ TFilaWorkerManager }
+
+constructor TFilaWorkerManager.Create;
+begin
+    inherited Create;
+    FListaWorker := TList<TWorker>.Create;
+    FProcessamentoAtivo := False;
+end;
+
+destructor TFilaWorkerManager.Destroy;
+begin
+    Finalizar;
+    FListaWorker.Free;
+    inherited;
+end;
+
+procedure TFilaWorkerManager.EnfileirarTarefa(const ATarefa: TProc);
+var
+    lMenosCarregado: TWorker;
+    liMenorFila: Integer;
+    lWorker: TWorker;
+begin
+    liMenorFila := MaxInt;
+    lMenosCarregado := nil;
+
+    for lWorker in FListaWorker do
+    begin
+        if lWorker.QtdeItens < liMenorFila then
+        begin
+            liMenorFila := lWorker.QtdeItens;
+            lMenosCarregado := lWorker;
+        end;
+    end;
+
+    if Assigned(lMenosCarregado) then
+        lMenosCarregado.EnfileirarTarefa(ATarefa);
+end;
+
+procedure TFilaWorkerManager.Finalizar;
+var
+    lWorker: TWorker;
+begin
+    FProcessamentoAtivo := False;
+
+    for lWorker in FListaWorker do
+        lWorker.Finalizar;
+
+    FListaWorker.Clear;
+end;
+
+procedure TFilaWorkerManager.Iniciar(const AQtdeWorkers: Integer);
+var
+    I: Integer;
+    lWorker: TWorker;
+begin
+    if FProcessamentoAtivo then
+        Exit;
+
+    FProcessamentoAtivo := True;
+
+    for I := 1 to AQtdeWorkers do
+    begin
+        lWorker := TWorker.Create;
+        FListaWorker.Add(lWorker);
+    end;
+end;
+
+function TFilaWorkerManager.QtdeItens: Integer;
+var
+    liTotal, I: Integer;
+begin
+    liTotal := 0;
+    for I := 0 to FListaWorker.Count - 1 do
+        Inc(liTotal, FListaWorker[I].QtdeItens);
+
+    Result := liTotal;
+end;
+
+{ TFilaWorkerRequest }
+
+constructor TFilaWorkerRequest.Create;
+begin
+    inherited Create;
+    FListaWorker := TList<TWorkerRequest>.Create;
+    FProcessamentoAtivo := False;
+end;
+
+destructor TFilaWorkerRequest.Destroy;
+begin
+    Finalizar;
+    FListaWorker.Free;
+    inherited;
+end;
+
+procedure TFilaWorkerRequest.EnfileirarTarefa(const ATarefa: TProc);
+var
+    lMenosCarregado: TWorkerRequest;
+    liMenorFila: Integer;
+    lWorker: TWorkerRequest;
+begin
+    liMenorFila := MaxInt;
+    lMenosCarregado := nil;
+
+    for lWorker in FListaWorker do
+    begin
+        if lWorker.QtdeItens < liMenorFila then
+        begin
+            liMenorFila := lWorker.QtdeItens;
+            lMenosCarregado := lWorker;
+        end;
+    end;
+
+    if Assigned(lMenosCarregado) then
+        lMenosCarregado.EnfileirarTarefa(ATarefa);
+end;
+
+procedure TFilaWorkerRequest.Finalizar;
+var
+    lWorker: TWorkerRequest;
+begin
+    FProcessamentoAtivo := False;
+
+    for lWorker in FListaWorker do
+        lWorker.Finalizar;
+
+    FListaWorker.Clear;
+end;
+
+procedure TFilaWorkerRequest.Iniciar(const AQtdeWorkers: Integer);
+var
+    I: Integer;
+    lWorker: TWorkerRequest;
+begin
+    if FProcessamentoAtivo then Exit;
+        FProcessamentoAtivo := True;
+
+    for I := 1 to AQtdeWorkers do
+    begin
+        lWorker := TWorkerRequest.Create;
+        FListaWorker.Add(lWorker);
+    end;
+end;
+
+function TFilaWorkerRequest.QtdeItens: Integer;
+var
+    liTotal, I: Integer;
+begin
+    liTotal := 0;
+    for I := 0 to FListaWorker.Count - 1 do
+        Inc(liTotal, FListaWorker[I].QtdeItens);
+
+    Result := liTotal;
 end;
 
 end.

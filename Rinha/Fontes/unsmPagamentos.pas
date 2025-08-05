@@ -8,7 +8,7 @@ uses System.SysUtils, System.Classes, System.Json, System.DateUtils,
     FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef,
     FireDAC.Stan.Option, Data.DB, FireDAC.Stan.Intf, FireDAC.Stan.Param, FireDAC.Stan.Error,
     FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf, FireDAC.Comp.DataSet,
-    unGenerica, unRequisicaoPendente, unDBHelper, unLogHelper, unScheduledHelper;
+    unGenerica, unRequisicaoPendente, unDBHelper, unLogHelper, unSchedulerHelper;
 
 type
   TsmPagamentos = class(TDSServerModule)
