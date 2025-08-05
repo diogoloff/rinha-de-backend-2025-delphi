@@ -51,36 +51,71 @@ begin
     if (not lbDefaultProcessor) then
         lsURL := FUrlFall + '/payments';
 
-    ljEnviar := TJSONObject.Create;
-    lStream  := nil;
-    try
+    with TWorkerRequest(TThread.CurrentThread) do
+    begin
         try
-            // Monta o corpo JSON
-            ljEnviar.AddPair('correlationId', AReq.correlationId);
-            ljEnviar.AddPair('amount', TJSONNumber.Create(AReq.amount));
-            ljEnviar.AddPair('requestedAt', AReq.requestedAt);
+            GarantirConexaoBD;
 
-            lStream := TStringStream.Create(ljEnviar.ToString, TEncoding.UTF8);
-
-            // Envia a requisição POST
-            lsResposta := TWorkerRequest(TThread.CurrentThread).IdHTTP.Post(lsURL, lStream);
-
-            // Talvez fazer o bloqueio intencional se timeout estiver muito alto, mesmo que esteja validando
-
-            Result := True;
-        except
-            on E: Exception do
+            with AReq do
             begin
-                // Talvez fazer o bloqueio intencional para só voltar depois de um tempo se estiver dando muito erro
+                Query.ParamByName('CORRELATION_ID').AsString := correlationId;
+                Query.ParamByName('AMOUNT').AsFMTBCD := amount;
 
-                //GerarLog('Erro Processar: ' + E.Message);
+                if (error) then
+                    Query.ParamByName('STATUS').AsString := 'error'
+                else
+                    Query.ParamByName('STATUS').AsString := 'success';
+
+                if (lbDefaultProcessor) then
+                    Query.ParamByName('PROCESSOR').AsString := 'default'
+                else
+                    Query.ParamByName('PROCESSOR').AsString := 'fallback';
+
+                Query.ParamByName('CREATED_AT').AsSQLTimeStamp := DateTimeToSQLTimeStamp(ISO8601ToDate(requestedAt));
+
+                if not Query.Prepared then
+                    Query.Prepare;
+            end;
+        except
+            on E : Exception do
+            begin
+                GerarLog('Erro ao Preparar o Banco: ' + E.Message);
+                Exit;
             end;
         end;
-    finally
-        if Assigned(lStream) then
-            lStream.Free;
 
-        ljEnviar.Free;
+        ljEnviar := TJSONObject.Create;
+        lStream  := nil;
+        try
+            try
+                // Monta o corpo JSON
+                ljEnviar.AddPair('correlationId', AReq.correlationId);
+                ljEnviar.AddPair('amount', TJSONNumber.Create(AReq.amount));
+                ljEnviar.AddPair('requestedAt', AReq.requestedAt);
+
+                lStream := TStringStream.Create(ljEnviar.ToString, TEncoding.UTF8);
+
+                // Envia a requisição POST
+                lsResposta := IdHTTP.Post(lsURL, lStream);
+
+                Query.ExecSQL;
+                Con.Commit;
+                Result := True;
+            except
+                on E: Exception do
+                begin
+                    if (Con.InTransaction) then
+                        Con.Rollback;
+
+                    GerarLog('Erro Processar: ' + E.Message);
+                end;
+            end;
+        finally
+            if Assigned(lStream) then
+                lStream.Free;
+
+            ljEnviar.Free;
+        end;
     end;
 end;
 
@@ -129,10 +164,6 @@ end;
 procedure ProcessarRequisicao(const AReq: TRequisicaoPendente);
 var
     lbDefault: Boolean;
-    lsResposta: string;
-    ljResposta: TJSONObject;
-    failing: Boolean;
-    minResponseTime: Integer;
 begin
     if not (TThread.CurrentThread is TWorkerRequest) then
         raise Exception.Create('Thread atual não é um WorkerRequest');
@@ -144,19 +175,9 @@ begin
     if AReq.attempt < 10 then
     begin
         if (EnviarParaProcessar(AReq, lbDefault)) then
-        begin
-            if (AReq.attempt = 1) and (not ServiceHealthMonitor.GetDefaultAtivo) then
-            begin
-                GerarLog('Voltou Sozinho:');
-                ServiceHealthMonitor.SetDefaultAtivo(True);
-            end;
-
-            GravarRequisicao(AReq, lbDefault);
             Exit
-        end;
 
-        ServiceHealthMonitor.VerificarSinal;
-        AdicionarWorkerReprocesso(AReq);
+        //AdicionarWorkerReprocesso(AReq);
     end
     else
     begin
@@ -255,7 +276,7 @@ begin
         while not TThread.CurrentThread.CheckTerminated do
         begin
             ExecutarAgendamentos;
-            Sleep(FTempoFila);
+            Sleep(500);
         end;
     end);
 end;

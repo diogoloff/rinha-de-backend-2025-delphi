@@ -24,14 +24,14 @@ type
         FIdHTTP: TIdHTTP;
         //FFilaCongestionada: Integer;
         //FUltimoBloqueio: TDateTime;
-        //FQtdeMaxRetencao: Integer;
+        FQtdeMaxRetencao: Integer;
         FThreadMonitorar: TThread;
 
         procedure ThreadMonitorar;
         procedure ExecutarHealthCheck;
         //function TempoMinimoBloqueioAdaptativo: Double;
     public
-        constructor Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer);
+        constructor Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer; const AQtdeMaxRetain: Integer);
         destructor Destroy; override;
 
         procedure Iniciar;
@@ -60,7 +60,7 @@ implementation
 
 { TServiceHealthMonitor }
 
-constructor TServiceHealthMonitor.Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer);
+constructor TServiceHealthMonitor.Create(const AHealthURL: string; const AConTimeOut: Integer; const AReadTimeOut: Integer; const AResTimeOut: Integer; const AQtdeMaxRetain: Integer);
 begin
     FEventoVerificar := TEvent.Create(nil, False, False, '');
     FMonitorLock := TCriticalSection.Create;
@@ -70,6 +70,7 @@ begin
     FTempoMaximoRespostaPadrao := AResTimeOut * 2;
     FUltimaVerificacao := IncSecond(Now, -6);
     FHealthURL := AHealthURL;
+    FQtdeMaxRetencao := AQtdeMaxRetain;
 
     FIdHTTP := TIdHTTP.Create(nil);
     FIdHTTP.ConnectTimeout := AConTimeOut;
@@ -190,6 +191,12 @@ begin
 
     FMonitoramentoAtivo := False;
     FEventoVerificar.SetEvent;
+
+    {if Assigned(FThreadMonitorar) then
+    begin
+        FThreadMonitorar.WaitFor;
+        FreeAndNil(FThreadMonitorar);
+    end;}
 end;
 
 procedure TServiceHealthMonitor.ThreadMonitorar;
@@ -201,18 +208,18 @@ begin
     while FMonitoramentoAtivo do
     begin
         // Aguarda até ser sinalizado que precisa verificar o status do serviço
-        if FEventoVerificar.WaitFor(INFINITE) = wrSignaled then
+        {if FEventoVerificar.WaitFor(INFINITE) = wrSignaled then
         begin
-            // Mesmo que sinalizado verifica se esta no tempo de verificar, já que existe limite de 5 segundos a cada verificação
+            // Mesmo que sinalizado verifica que esta no tempo de verificar, já que existe limite de 5 segundos a cada verificação
             if SecondsBetween(Now, FUltimaVerificacao) >= 5 then
             begin
                 FUltimaVerificacao := Now;
                 ExecutarHealthCheck;
             end;
-        end;
+        end; }
 
         // Aguarda até 5 segundos pelo sinal
-        {if (lbPrimeiro) then
+        if (lbPrimeiro) then
         begin
             lEstadoEvento := FEventoVerificar.WaitFor(INFINITE);
             lbPrimeiro := False;
@@ -229,7 +236,7 @@ begin
         begin
             FUltimaVerificacao := Now;
             ExecutarHealthCheck;
-        end;       }
+        end;
 
         // Verifica se pode sair da contenção
         {if (GetFilaCongestionada) then
@@ -313,9 +320,9 @@ end;}
 
 procedure IniciarHealthCk;
 begin
-    ServiceHealthMonitor := TServiceHealthMonitor.Create(FUrl, FConTimeOut, FReadTimeOut, FResTimeOut);
+    ServiceHealthMonitor := TServiceHealthMonitor.Create(FUrl, FConTimeOut, FReadTimeOut, FResTimeOut, FNumMaxRetain);
     ServiceHealthMonitor.Iniciar;
-    //ServiceHealthMonitor.VerificarSinal;
+    ServiceHealthMonitor.VerificarSinal;
 end;
 
 procedure FinalizarHealthCk;

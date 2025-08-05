@@ -204,9 +204,9 @@ begin
     GerarLog('(CON_TIME_OUT) Timeout Conexão: ' + IntToStr(FConTimeOut));
     GerarLog('(READ_TIME_OUT) Timeout Retorno Health: ' + IntToStr(FReadTimeOut));
     GerarLog('(RES_TIME_OUT) Timeout Padrão Processamento: ' + IntToStr(FResTimeOut));
-    GerarLog('(NUM_WORKERS_FILA) Quantidade de Workers da Fila: ' + IntToStr(FNumMaxWorkersFila));
-    GerarLog('(NUM_WORKERS_PROCESSO) Quantidade de Workers do Processo: ' + IntToStr(FNumMaxWorkersProcesso));
-    GerarLog('(TEMPO_FILA) Tempo Descarga de Fila: ' + IntToStr(FTempoFila));
+    GerarLog('(QTDE_MAX_RETAIN) Quantidade Maxima de Itens para Ativar Retenção: ' + IntToStr(FNumMaxRetain));
+    GerarLog('(NUM_WORKERS) Quantidade de Workers: ' + IntToStr(FNumMaxWorkers));
+    GerarLog('(DELTA) Delta Adaptativo: ' + IntToStr(FDetalAdaptativo));
 
     GerarLog(cArrow);
 end;

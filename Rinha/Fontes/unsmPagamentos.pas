@@ -16,8 +16,8 @@ type
     { Private declarations }
   public
     { Public declarations }
-    function EnviarPagamento(const JSON: string): String;
-    function ObterResumoPagamentos(const FromISO, ToISO: string): String;
+    function EnviarPagamento(const AJSON: string): String;
+    function ObterResumoPagamentos(const AFrom, ATo: string): String;
   end;
 
 implementation
@@ -26,7 +26,7 @@ implementation
 
 {$R *.dfm}
 
-function TsmPagamentos.EnviarPagamento(const JSON: string): String;
+function TsmPagamentos.EnviarPagamento(const AJSON: string): String;
 var
     ljObj: TJSONObject;
     correlationId: string;
@@ -36,7 +36,7 @@ var
 begin
     ljObj := nil;
     try
-        ljObj := TJSONObject.ParseJSONValue(JSON) as TJSONObject;
+        ljObj := TJSONObject.ParseJSONValue(AJSON) as TJSONObject;
         correlationId := ljObj.GetValue('correlationId').Value;
         amount := StrToFloat(ljObj.GetValue('amount').Value);
         requestedAt := DateToISO8601(Now, True);
@@ -46,53 +46,48 @@ begin
 
     ltReq := TRequisicaoPendente.Create(correlationId, amount, requestedAt);
 
-    // Antes de adicionar o worker talvez seria importante ver quantos itens tem na fila e de alguma forma gerar uma espécie de timeout
-    // minimo para segurar as novas requisições até a fila aliviar novamente
-
-    //LiberaCarga;
-
-    AdicionarWorker(ltReq);
+    AdicionarWorker(ltReq);
 
     Result := '';
 end;
 
-function TsmPagamentos.ObterResumoPagamentos(const FromISO, ToISO: string): String;
+function TsmPagamentos.ObterResumoPagamentos(const AFrom, ATo: string): String;
 var
     lCon: TFDConnection;
-    sqlWhere: string;
-    TotalDefault, TotalFallback: Integer;
-    AmountDefault, AmountFallback: Double;
-    FS: TFormatSettings;
-    QyPagto: TFDQuery;
+    lFS: TFormatSettings;
+    lQuery: TFDQuery;
+    lsSqlWhere: string;
+
+    TotalDefault: Integer;
+    TotalFallback: Integer;
+    AmountDefault: Double;
+    AmountFallback: Double;
 begin
     lCon := CriarConexaoFirebird;
-    QyPagto := TFDQuery.Create(nil);
+    lQuery := TFDQuery.Create(nil);
     try
-        QyPagto.Connection := lCon;
+        lQuery.Connection := lCon;
 
         try
-            // Monta WHERE dinâmico
-            sqlWhere := '';
-            if FromISO <> '' then
-                sqlWhere := sqlWhere + ' AND created_at >= :from ';
+            lsSqlWhere := '';
+            if AFrom <> '' then
+                lsSqlWhere := lsSqlWhere + ' AND created_at >= :from ';
 
-            if ToISO <> '' then
-                sqlWhere := sqlWhere + ' AND created_at <= :to ';
+            if ATo <> '' then
+                lsSqlWhere := lsSqlWhere + ' AND created_at <= :to ';
 
-            // Consulta com agregação por processor
-            QyPagto.SQL.Text :=
+            lQuery.SQL.Text :=
                 'SELECT processor, COUNT(*) AS totalRequests, SUM(amount) AS totalAmount ' +
-                'FROM payments WHERE status = ''success'' ' + sqlWhere +
+                'FROM payments WHERE status = ' + QuotedStr('success') + lsSqlWhere +
                 'GROUP BY processor';
 
-            if FromISO <> '' then
-                QyPagto.ParamByName('from').AsDateTime := ISO8601ToDate(FromISO);
+            if AFrom <> '' then
+                lQuery.ParamByName('from').AsDateTime := ISO8601ToDate(AFrom);
 
-            if ToISO <> '' then
-                QyPagto.ParamByName('to').AsDateTime := ISO8601ToDate(ToISO);
+            if ATo <> '' then
+                lQuery.ParamByName('to').AsDateTime := ISO8601ToDate(ATo);
 
-            // Executa e processa o resultado
-            QyPagto.Open;
+            lQuery.Open;
 
             TotalDefault := 0;
             AmountDefault := 0.0;
@@ -100,30 +95,30 @@ begin
             TotalFallback := 0;
             AmountFallback := 0.0;
 
-            while not QyPagto.Eof do
+            while not lQuery.Eof do
             begin
-                if QyPagto.FieldByName('processor').AsString = 'default' then
+                if lQuery.FieldByName('processor').AsString = 'default' then
                 begin
-                    TotalDefault := QyPagto.FieldByName('totalRequests').AsInteger;
-                    AmountDefault := QyPagto.FieldByName('totalAmount').AsFloat;
+                    TotalDefault := lQuery.FieldByName('totalRequests').AsInteger;
+                    AmountDefault := lQuery.FieldByName('totalAmount').AsFloat;
                 end
                 else
                 begin
-                    TotalFallback := QyPagto.FieldByName('totalRequests').AsInteger;
-                    AmountFallback := QyPagto.FieldByName('totalAmount').AsFloat;
+                    TotalFallback := lQuery.FieldByName('totalRequests').AsInteger;
+                    AmountFallback := lQuery.FieldByName('totalAmount').AsFloat;
                 end;
 
-                QyPagto.Next;
+                lQuery.Next;
             end;
 
-            FS := TFormatSettings.Create;
-            FS.DecimalSeparator := '.';
+            lFS := TFormatSettings.Create;
+            lFS.DecimalSeparator := '.';
 
             Result :=
                 '{ "default": { "totalRequests": ' + IntToStr(TotalDefault) +
-                ', "totalAmount": ' + FormatFloat('0.00', AmountDefault, FS) + ' }, ' +
+                ', "totalAmount": ' + FormatFloat('0.00', AmountDefault, lFS) + ' }, ' +
                 '"fallback": { "totalRequests": ' + IntToStr(TotalFallback) +
-                ', "totalAmount": ' + FormatFloat('0.00', AmountFallback, FS) + ' } }';
+                ', "totalAmount": ' + FormatFloat('0.00', AmountFallback, lFS) + ' } }';
         except
             on E : Exception do
             begin
@@ -131,7 +126,7 @@ begin
             end;
         end;
     finally
-        QyPagto.Free;
+        lQuery.Free;
         DestruirConexaoFirebird(lCon);
     end;
 end;
