@@ -94,10 +94,10 @@ procedure IniciarWorkers;
 begin
     // Fila para organização das requisições
     FilaWorkerManager := TFilaWorkerManager.Create;
-    FilaWorkerManager.Iniciar(FNumMaxWorkersFila);
+    FilaWorkerManager.Iniciar(FNumMaxWorkers);
 
     FilaWorkerRequest := TFilaWorkerRequest.Create;
-    FilaWorkerRequest.Iniciar(FNumMaxWorkersProcesso);
+    FilaWorkerRequest.Iniciar(FNumMaxWorkers);
 end;
 
 procedure FinalizarWorkers;
@@ -257,6 +257,7 @@ begin
     begin
         try
             FCon.Open;
+            GerarLog('Conexão aberta pelo worker');
         except
             on E: Exception do
             begin
@@ -276,6 +277,7 @@ begin
         begin
             try
                 FCon.Close;
+                GerarLog('Conexão encerrada por inatividade');
             except
                 on E: Exception do
                 begin

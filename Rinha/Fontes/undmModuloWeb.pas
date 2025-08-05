@@ -3,11 +3,11 @@
 interface
 
 uses
-  System.SysUtils, System.Classes, Web.HTTPApp, Datasnap.DSHTTPCommon,
-  Datasnap.DSHTTPWebBroker, Datasnap.DSServer,
-  Web.WebFileDispatcher, Web.HTTPProd,
-  DataSnap.DSAuth,
-  Datasnap.DSProxyJavaScript, IPPeerServer, Datasnap.DSMetadata, Datasnap.DSServerMetadata, Datasnap.DSClientMetadata, Datasnap.DSCommonServer, Datasnap.DSHTTP;
+  System.SysUtils, System.Classes, System.Json,
+  Web.HTTPApp, Web.WebFileDispatcher, Web.HTTPProd,
+  Datasnap.DSHTTPCommon, Datasnap.DSHTTPWebBroker, Datasnap.DSServer,
+  DataSnap.DSAuth, Datasnap.DSProxyJavaScript, IPPeerServer, Datasnap.DSMetadata, Datasnap.DSServerMetadata,
+  Datasnap.DSClientMetadata, Datasnap.DSCommonServer, Datasnap.DSHTTP;
 
 type
   TdmModuloWeb = class(TWebModule)
@@ -39,15 +39,14 @@ uses unsmPagamentos, undmServer, Web.WebReq;
 procedure TdmModuloWeb.dmModuloWebObterResumoPagamentosAction(Sender: TObject; Request: TWebRequest; Response: TWebResponse; var Handled: Boolean);
 var
     Pagamentos: TsmPagamentos;
-    FromParam, ToParam: string;
+    lsFromParam, lsToParam: string;
 begin
     Pagamentos := TsmPagamentos.Create(nil);
     try
-        // Extrai os parâmetros da URL
-        FromParam := Request.QueryFields.Values['from'];
-        ToParam := Request.QueryFields.Values['to'];
+        lsFromParam := Request.QueryFields.Values['from'];
+        lsToParam := Request.QueryFields.Values['to'];
 
-        Response.Content := Pagamentos.ObterResumoPagamentos(FromParam, ToParam);
+        Response.Content := Pagamentos.ObterResumoPagamentos(lsFromParam, lsToParam);
         Response.ContentType := 'application/json';
         Handled := True;
     finally
@@ -61,8 +60,9 @@ var
 begin
     Pagamentos := TsmPagamentos.Create(nil);
     try
-        Response.Content := Pagamentos.EnviarPagamento(Request.Content);
-        Response.ContentType := 'application/json';
+        Pagamentos.EnviarPagamento(Request.Content);
+        //Response.Content := Pagamentos.EnviarPagamento(Request.Content);
+        //Response.ContentType := 'application/json';
         Handled := True;
     finally
         Pagamentos.Free;

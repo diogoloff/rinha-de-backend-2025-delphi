@@ -27,9 +27,9 @@ var
     FConTimeOut: Integer;
     FReadTimeOut: Integer;
     FResTimeOut: Integer;
-    FNumMaxWorkersFila: Integer;
-    FNumMaxWorkersProcesso: Integer;
-    FTempoFila: Integer;
+    FNumMaxRetain: Integer;
+    FNumMaxWorkers: Integer;
+    FDetalAdaptativo: Integer;
 
 implementation
 
@@ -78,9 +78,9 @@ begin
     FConTimeOut := StrToIntDef(GetEnv('CON_TIME_OUT', ''), 50);
     FReadTimeOut := StrToIntDef(GetEnv('READ_TIME_OUT', ''), 3500);
     FResTimeOut := StrToIntDef(GetEnv('RES_TIME_OUT', ''), 200);
-    FNumMaxWorkersFila := StrToIntDef(GetEnv('NUM_WORKERS_FILA', ''), 2);
-    FNumMaxWorkersProcesso := StrToIntDef(GetEnv('NUM_WORKERS_PROCESSO', ''), 2);
-    FTempoFila := StrToIntDef(GetEnv('TEMPO_FILA', ''), 500);
+    FNumMaxRetain := StrToIntDef(GetEnv('QTDE_MAX_RETAIN', ''), 500);
+    FNumMaxWorkers := StrToIntDef(GetEnv('NUM_WORKERS', ''), 2);
+    FDetalAdaptativo := StrToIntDef(GetEnv('DELTA', ''), 4);
 
      if (FConTimeOut < 10) or (FConTimeOut > 100) then
         FConTimeOut := 50;
@@ -91,14 +91,14 @@ begin
     if (FResTimeOut < 100) or (FResTimeOut > 5000) then
         FResTimeOut := 1000;
 
-    if (FNumMaxWorkersFila < 2) or (FNumMaxWorkersFila > 2000) then
-        FNumMaxWorkersFila := 4;
+    if (FNumMaxRetain < 100) or (FNumMaxRetain > 1000) then
+        FNumMaxRetain := 250;
 
-    if (FNumMaxWorkersProcesso < 2) or (FNumMaxWorkersProcesso > 2000) then
-        FNumMaxWorkersProcesso := 25;
+    if (FNumMaxWorkers < 2) or (FNumMaxWorkers > 2000) then
+        FNumMaxWorkers := 2;
 
-    if (FTempoFila < 100) or (FTempoFila > 1000) then
-        FTempoFila := 500;
+    if (FDetalAdaptativo < 1) or (FDetalAdaptativo > 9) then
+        FDetalAdaptativo := 4;
 end;
 
 initialization
