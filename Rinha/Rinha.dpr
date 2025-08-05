@@ -19,7 +19,7 @@ uses
   unDBHelper in 'Fontes\unDBHelper.pas',
   unWorkerHelper in 'Fontes\unWorkerHelper.pas',
   unHealthHelper in 'Fontes\unHealthHelper.pas',
-  unScheduledHelper in 'Fontes\unScheduledHelper.pas',
+  unSchedulerHelper in 'Fontes\unSchedulerHelper.pas',
   unsmPagamentos in 'Fontes\unsmPagamentos.pas' {smPagamentos: TDSServerModule},
   undmServer in 'Fontes\undmServer.pas' {dmServer: TDataModule},
   undmModuloWeb in 'Fontes\undmModuloWeb.pas' {dmModuloWeb: TWebModule};

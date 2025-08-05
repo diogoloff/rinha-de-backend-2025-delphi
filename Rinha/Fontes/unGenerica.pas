@@ -45,8 +45,10 @@ var
     lsArquivo : String;
     lsData : String;
 begin
-    if (not FDebug) then
-        Exit;
+    {$IFNDEF DEBUG}
+        if (not FDebug) then
+            Exit;
+    {$ENDIF}
 
     {$IFNDEF SERVICO}
         if (lbQuebraLinhaConsole) then

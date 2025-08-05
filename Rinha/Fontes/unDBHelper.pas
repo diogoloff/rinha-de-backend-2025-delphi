@@ -8,11 +8,25 @@ uses
     FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef, FireDAC.Stan.Pool,
     FireDAC.Stan.Option, Data.DB, unGenerica;
 
+    procedure PreparaConexaoFirebird(ACon: TFDConnection);
     function CriarConexaoFirebird: TFDConnection;
     function ParametrosBanco: TStringList;
     procedure DestruirConexaoFirebird(var lCon: TFDConnection);
 
 implementation
+
+procedure PreparaConexaoFirebird(ACon: TFDConnection);
+begin
+    //ACon.DriverName := 'FB';
+    ACon.ConnectionDefName := 'RINHA';
+    ACon.LoginPrompt := False;
+    ACon.TxOptions.AutoCommit := True;
+    ACon.TxOptions.AutoStop := False;
+    //ACon.TxOptions.DisconnectAction := xdRollback;
+    ACon.UpdateOptions.UpdateMode := upWhereKeyOnly;
+    ACon.UpdateOptions.LockMode := lmPessimistic;
+    //ACon.ResourceOptions.KeepConnection := False;
+end;
 
 function CriarConexaoFirebird: TFDConnection;
 var
@@ -20,15 +34,7 @@ var
 begin
     lCon := TFDConnection.Create(nil);
     try
-        //lCon.DriverName := 'FB';
-        lCon.ConnectionDefName := 'RINHA';
-        lCon.LoginPrompt := False;
-        lCon.TxOptions.AutoCommit := True;
-        lCon.TxOptions.AutoStop := False;
-        {lCon.TxOptions.DisconnectAction := xdRollback;
-        lCon.UpdateOptions.UpdateMode := upWhereKeyOnly;
-        lCon.UpdateOptions.LockMode := lmPessimistic;
-        lCon.ResourceOptions.KeepConnection := False;}
+        PreparaConexaoFirebird(lCon);
         lCon.Connected := True;
         Result := lCon;
     except
@@ -50,7 +56,7 @@ begin
     begin
         Add('Pooled=True');
         Add('POOL_MaximumItems=500');
-        Add('POOL_CleanupTimeout=5');
+        //Add('POOL_CleanupTimeout=5');  // Removido pois a desconexão agora esta sendo manual
         Add('ReadConsistency=True');
         Add('Database=/var/lib/firebird/data/' + GetEnv('DB_NAME', 'banco.fdb'));
         Add('User_Name=' + GetEnv('DB_USER', 'SYSDBA'));

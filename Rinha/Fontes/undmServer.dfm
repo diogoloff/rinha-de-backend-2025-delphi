@@ -17,11 +17,12 @@ object dmServer: TdmServer
   end
   object FDManagerRinha: TFDManager
     WaitCursor = gcrNone
+    FetchOptions.AssignedValues = [evMode]
+    FetchOptions.Mode = fmAll
     FormatOptions.AssignedValues = [fvMapRules]
     FormatOptions.OwnMapRules = True
     FormatOptions.MapRules = <>
     ResourceOptions.AssignedValues = [rvKeepConnection]
-    ResourceOptions.KeepConnection = False
     UpdateOptions.AssignedValues = [uvLockMode]
     UpdateOptions.LockMode = lmPessimistic
     Active = True

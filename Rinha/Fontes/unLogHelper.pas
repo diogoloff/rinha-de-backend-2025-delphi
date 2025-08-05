@@ -66,7 +66,8 @@ begin
             ReportLines.Add(Linha);
         end;
 
-        TFile.WriteAllText('/opt/rinha/Logs/fila-relatorio.txt', ReportLines.Text, TEncoding.UTF8);
+        if (ReportLines.Count > 0) then
+            TFile.WriteAllText('/opt/rinha/Logs/fila-relatorio.txt', ReportLines.Text, TEncoding.UTF8);
     finally
         ReportLines.Free;
     end;

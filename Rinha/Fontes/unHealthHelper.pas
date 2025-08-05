@@ -1,4 +1,6 @@
-﻿unit unHealthHelper;
+﻿// Refatorar esta unit, remover a thread anonima e colocar um worker
+
+unit unHealthHelper;
 
 interface
 
@@ -55,8 +57,6 @@ var
     ServiceHealthMonitor: TServiceHealthMonitor;
 
 implementation
-
-uses unScheduledHelper;
 
 { TServiceHealthMonitor }
 
@@ -192,11 +192,11 @@ begin
     FMonitoramentoAtivo := False;
     FEventoVerificar.SetEvent;
 
-    if Assigned(FThreadMonitorar) then
+    {if Assigned(FThreadMonitorar) then
     begin
         FThreadMonitorar.WaitFor;
         FreeAndNil(FThreadMonitorar);
-    end;
+    end;}
 end;
 
 procedure TServiceHealthMonitor.ThreadMonitorar;
@@ -226,6 +226,9 @@ begin
         end
         else
             lEstadoEvento := FEventoVerificar.WaitFor(5000);
+
+        if (not FMonitoramentoAtivo) then
+            Break;
 
         // Se sinal recebido OU tempo limite passou, executa verificação
         if (lEstadoEvento = wrSignaled) or

@@ -8,7 +8,7 @@ uses System.SysUtils, System.Classes, System.IOUtils, System.SyncObjs, System.Da
   FireDAC.Stan.Def, FireDAC.Phys, FireDAC.Comp.Client, FireDAC.ConsoleUI.Wait, FireDAC.Phys.FBDef, FireDAC.Phys.IBBase, FireDAC.Phys.FB, FireDAC.Comp.UI,
   IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP, System.Generics.Collections, FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf,
   FireDAC.Stan.Async, FireDAC.DApt, Data.DB, FireDAC.Comp.DataSet,
-  unGenerica, unConstantes, unWorkerHelper, unDBHelper, unHealthHelper, unScheduledHelper;
+  unGenerica, unConstantes, unWorkerHelper, unDBHelper, unHealthHelper, unSchedulerHelper;
 
 type
     TdmServer = class(TDataModule)
@@ -99,9 +99,9 @@ end;
 
 procedure TdmServer.DataModuleDestroy(Sender: TObject);
 begin
+    FinalizarScheduled;
     FinalizarWorkers;
     FinalizarHealthCk;
-    FinalizarScheduled;
 end;
 
 destructor TdmServer.Destroy;
@@ -132,10 +132,13 @@ begin
             'delete from PAYMENTS';
 
         try
+            lCon.StartTransaction;
             QyPagto.ExecSQL;
+            lCon.Commit;
         except
             on E : Exception do
             begin
+                lCon.Rollback;
                 GerarLog('Erro Gravar: ' + E.Message);
             end;
         end;

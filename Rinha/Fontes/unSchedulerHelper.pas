@@ -1,10 +1,10 @@
-﻿unit unScheduledHelper;
+﻿unit unSchedulerHelper;
 
 interface
 
 uses
     System.SysUtils, System.Classes, System.DateUtils, System.Generics.Collections, System.SyncObjs,
-    System.JSON, System.IOUtils, System.Math,
+    System.JSON, System.IOUtils, System.Math, Data.SqlTimSt, Data.FmtBcd,
 
     IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP,
 
@@ -25,7 +25,6 @@ type
 
     procedure AdicionarWorker(const AReq : TRequisicaoPendente);
     procedure AdicionarWorkerReprocesso(const AReq : TRequisicaoPendente);
-    procedure AdicionarWorkerGravacao(const AReq : TRequisicaoPendente; const ADefault: Boolean);
     procedure ProcessarRequisicao(const AReq: TRequisicaoPendente);
     procedure Agendar(const AReq: TRequisicaoPendente);
 
@@ -41,97 +40,86 @@ var
     lsResposta: string;
     lsURL : String;
     lStream: TStringStream;
-    IdHTTPPagamentos: TIdHTTP;
     liTempoMinimoResposta: Integer;
 begin
     Result := False;
-    liTempoMinimoResposta := ServiceHealthMonitor.GetTempoMinimoResposta;
+    //liTempoMinimoResposta := ServiceHealthMonitor.GetTempoMinimoResposta;
+    //IdHTTPPagamentos.ReadTimeout := liTempoMinimoResposta;
 
-    IdHTTPPagamentos := TIdHTTP.Create(nil);
+    lsURL := FUrl + '/payments';
+    if (not lbDefaultProcessor) then
+        lsURL := FUrlFall + '/payments';
+
+    ljEnviar := TJSONObject.Create;
+    lStream  := nil;
     try
-        IdHTTPPagamentos.ConnectTimeout := FConTimeOut;
-        IdHTTPPagamentos.ReadTimeout := liTempoMinimoResposta;
-        IdHTTPPagamentos.Request.ContentType := 'application/json';
-
-        lsURL := FUrl + '/payments';
-        if (not lbDefaultProcessor) then
-            lsURL := FUrlFall + '/payments';
-
-        ljEnviar := TJSONObject.Create;
-        lStream  := nil;
         try
-            try
-                // Monta o corpo JSON
-                ljEnviar.AddPair('correlationId', AReq.correlationId);
-                ljEnviar.AddPair('amount', TJSONNumber.Create(AReq.amount));
-                ljEnviar.AddPair('requestedAt', AReq.requestedAt);
+            // Monta o corpo JSON
+            ljEnviar.AddPair('correlationId', AReq.correlationId);
+            ljEnviar.AddPair('amount', TJSONNumber.Create(AReq.amount));
+            ljEnviar.AddPair('requestedAt', AReq.requestedAt);
 
-                lStream := TStringStream.Create(ljEnviar.ToString, TEncoding.UTF8);
+            lStream := TStringStream.Create(ljEnviar.ToString, TEncoding.UTF8);
 
-                // Envia a requisição POST
-                lsResposta :=
-                    IdHTTPPagamentos.Post(
-                        lsURL,
-                        lStream
-                    );
+            // Envia a requisição POST
+            lsResposta := TWorkerRequest(TThread.CurrentThread).IdHTTP.Post(lsURL, lStream);
 
-                Result := True;
-            except
-                on E: Exception do
-                begin
-                    GerarLog('Erro Processar: ' + E.Message);
-                end;
+            Result := True;
+        except
+            on E: Exception do
+            begin
+                GerarLog('Erro Processar: ' + E.Message);
             end;
-        finally
-            if Assigned(lStream) then
-                lStream.Free;
-
-            ljEnviar.Free;
         end;
     finally
-        IdHTTPPagamentos.Free;
+        if Assigned(lStream) then
+            lStream.Free;
+
+        ljEnviar.Free;
     end;
 end;
 
 procedure GravarRequisicao(const AReq: TRequisicaoPendente; const ADefaultProcessor: Boolean);
-var
-    lCon: TFDConnection;
-    QyPagto: TFDQuery;
 begin
-    lCon := CriarConexaoFirebird;
-    QyPagto := TFDQuery.Create(nil);
-    try
-        QyPagto.Connection := lCon;
-
-        QyPagto.SQL.Text :=
-            'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
-
+    // Conferir se a tabela não esta gerando erro devido ao CORRELATION_ID ser UNICO.
+    // Talvez remover esta questão
+    with TWorkerRequest(TThread.CurrentThread) do
+    begin
         try
+            GarantirConexaoBD;
+
             with AReq do
             begin
-                QyPagto.ParamByName('CORRELATION_ID').AsString := correlationId;
-                QyPagto.ParamByName('AMOUNT').AsFloat := amount;
+                Query.ParamByName('CORRELATION_ID').AsString := correlationId;
+                Query.ParamByName('AMOUNT').AsFMTBCD := amount;
 
-                QyPagto.ParamByName('STATUS').AsString := 'success';
                 if (error) then
-                    QyPagto.ParamByName('STATUS').AsString := 'error';
+                    Query.ParamByName('STATUS').AsString := 'error'
+                else
+                    Query.ParamByName('STATUS').AsString := 'success';
 
-                QyPagto.ParamByName('PROCESSOR').AsString := 'fallback';
                 if (ADefaultProcessor) then
-                    QyPagto.ParamByName('PROCESSOR').AsString := 'default';
+                    Query.ParamByName('PROCESSOR').AsString := 'default'
+                else
+                    Query.ParamByName('PROCESSOR').AsString := 'fallback';
 
-                QyPagto.ParamByName('CREATED_AT').AsDateTime := ISO8601ToDate(requestedAt);
-                QyPagto.ExecSQL;
+                Query.ParamByName('CREATED_AT').AsSQLTimeStamp := DateTimeToSQLTimeStamp(ISO8601ToDate(requestedAt));
+
+                if not Query.Prepared then
+                    Query.Prepare;
+
+                Query.ExecSQL;
+                Con.Commit;
             end;
         except
             on E : Exception do
             begin
+                if (Con.InTransaction) then
+                    Con.Rollback;
+
                 GerarLog('Erro Gravar: ' + E.Message);
             end;
         end;
-    finally
-        QyPagto.Free;
-        DestruirConexaoFirebird(lCon);
     end;
 end;
 
@@ -139,6 +127,9 @@ procedure ProcessarRequisicao(const AReq: TRequisicaoPendente);
 var
     lbDefault: Boolean;
 begin
+    if not (TThread.CurrentThread is TWorkerRequest) then
+        raise Exception.Create('Thread atual não é um WorkerRequest');
+
     lbDefault := True;
     if AReq.attempt > 1 then
         lbDefault := ServiceHealthMonitor.GetDefaultAtivo;
@@ -147,7 +138,7 @@ begin
     begin
         if (EnviarParaProcessar(AReq, lbDefault)) then
         begin
-            AdicionarWorkerGravacao(AReq, lbDefault);
+            GravarRequisicao(AReq, lbDefault);
             Exit
         end;
 
@@ -162,15 +153,6 @@ end;
 
 procedure AdicionarWorker(const AReq : TRequisicaoPendente);
 begin
-    // Tirei a questão de jogar para a fila e fazer diretamente com worker
-    // Ter fila somente para as segundas tentativas
-    {FilaWorkerManager.EnfileirarTarefa(
-    procedure
-    begin
-        ProcessarRequisicao(AReq);
-        //Agendar(AReq);
-    end); }
-
     FilaWorkerManager.EnfileirarTarefa(
     procedure
     begin
@@ -189,20 +171,11 @@ end;
 
 procedure AdicionarWorkerProcessamento(const AReq : TRequisicaoPendente);
 begin
-    FilaWorkerManager.EnfileirarTarefa(
+    FilaWorkerRequest.EnfileirarTarefa(
     procedure
     begin
         ProcessarRequisicao(AReq);
     end);
-end;
-
-procedure AdicionarWorkerGravacao(const AReq : TRequisicaoPendente; const ADefault: Boolean);
-begin
-    //FilaWorkerSave.EnfileirarTarefa(
-    //procedure
-    //begin
-        GravarRequisicao(AReq, ADefault);
-    //end);
 end;
 
 function CalcularTempoAdaptativo(const AReq: TRequisicaoPendente): Integer;
