@@ -152,6 +152,8 @@ begin
             end;
 
             GravarRequisicao(AReq, lbDefault);
+
+            FilaLogger.LogExecucao(AReq.correlationId, sfSalvo, 0);
             Exit
         end;
 
@@ -206,8 +208,6 @@ var
     lLista: TList<TScheduledTask>;
     lTask: TScheduledTask;
 begin
-    FilaLogger.LogEntrada(AReq.correlationId);
-
     if (AReq.attempt = 0) then
         lTask.ExecuteAt := Now
     else

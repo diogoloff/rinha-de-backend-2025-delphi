@@ -46,6 +46,8 @@ begin
 
     ltReq := TRequisicaoPendente.Create(correlationId, amount, requestedAt);
 
+    FilaLogger.LogEntrada(correlationId);
+
     AdicionarWorker(ltReq);
 
     Result := '';

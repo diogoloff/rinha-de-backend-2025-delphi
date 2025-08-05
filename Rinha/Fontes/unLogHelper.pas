@@ -104,7 +104,7 @@ begin
 
     if FLog.TryGetValue(AID, Entry) then
     begin
-        if (AStatus = sfDescartado) then
+        if (AStatus = sfDescartado) or (AStatus = sfSalvo) then
             ALatencia := MilliSecondsBetween(Now, Entry.Entrada);
 
         Entry.UltimaExecucao := Now;
