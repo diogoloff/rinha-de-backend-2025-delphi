@@ -39,6 +39,22 @@ type
     TWorkerRequest = class(TWorkerBase)
     private
         FIdHTTP: TIdHTTP;
+        //FCon: TFDConnection;
+        //FQuery: TFDQuery;
+        //FUltimoUsoBD: TDateTime;
+    public
+        constructor Create;
+        destructor Destroy; override;
+        //procedure GarantirConexaoBD;
+        //procedure VerificarExpiracaoConexaoBD;
+
+        property IdHTTP: TIdHTTP read FIdHTTP;
+        //property Con: TFDConnection read FCon;
+        //property Query: TFDQuery read FQuery;
+    end;
+
+    TWorkerBD = class(TWorkerBase)
+    private
         FCon: TFDConnection;
         FQuery: TFDQuery;
         FUltimoUsoBD: TDateTime;
@@ -48,7 +64,6 @@ type
         procedure GarantirConexaoBD;
         procedure VerificarExpiracaoConexaoBD;
 
-        property IdHTTP: TIdHTTP read FIdHTTP;
         property Con: TFDConnection read FCon;
         property Query: TFDQuery read FQuery;
     end;
@@ -81,23 +96,40 @@ type
         function QtdeItens: Integer;
     end;
 
+    TFilaWorkerBD = class
+    private
+        FListaWorker: TList<TWorkerBD>;
+        FProcessamentoAtivo: Boolean;
+    public
+        constructor Create;
+        destructor Destroy; override;
+
+        procedure Iniciar(const AQtdeWorkers: Integer);
+        procedure Finalizar;
+        procedure EnfileirarTarefa(const ATarefa: TProc);
+        function QtdeItens: Integer;
+    end;
+
     procedure IniciarWorkers;
     procedure FinalizarWorkers;
 
 var
     FilaWorkerManager : TFilaWorkerManager;
     FilaWorkerRequest : TFilaWorkerRequest;
+    FilaWorkerBD : TFilaWorkerBD;
 
 implementation
 
 procedure IniciarWorkers;
 begin
-    // Fila para organização das requisições
     FilaWorkerManager := TFilaWorkerManager.Create;
     FilaWorkerManager.Iniciar(FNumMaxWorkersFila);
 
     FilaWorkerRequest := TFilaWorkerRequest.Create;
     FilaWorkerRequest.Iniciar(FNumMaxWorkersProcesso);
+
+    FilaWorkerBD := TFilaWorkerBD.Create;
+    FilaWorkerBD.Iniciar(FNumMaxWorkersProcesso);
 end;
 
 procedure FinalizarWorkers;
@@ -107,6 +139,9 @@ begin
 
     if (Assigned(FilaWorkerRequest)) then
         FilaWorkerRequest.Free;
+
+    if (Assigned(FilaWorkerBD)) then
+        FilaWorkerBD.Free;
 end;
 
 { TWorkerBase }
@@ -158,8 +193,8 @@ begin
         begin
             FEventoFila.WaitFor(50);
 
-            if Self is TWorkerRequest then
-                TWorkerRequest(Self).VerificarExpiracaoConexaoBD;
+            if Self is TWorkerBD then
+                TWorkerBD(Self).VerificarExpiracaoConexaoBD;
 
             Continue;
         end;
@@ -230,28 +265,28 @@ begin
     FIdHTTP.ReadTimeout := FReadTimeOut;
     FIdHTTP.Request.ContentType := 'application/json';
 
-    FCon := TFDConnection.Create(nil);
-    PreparaConexaoFirebird(FCon);
+    //FCon := TFDConnection.Create(nil);
+    //PreparaConexaoFirebird(FCon);
 
-    FQuery := TFDQuery.Create(nil);
-    FQuery.Connection := FCon;
-    FQuery.SQL.Text := 'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) ' +
-                       'values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
+    //FQuery := TFDQuery.Create(nil);
+    //FQuery.Connection := FCon;
+    //FQuery.SQL.Text := 'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) ' +
+    //                   'values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
 end;
 
 destructor TWorkerRequest.Destroy;
 begin
-    if (FCon.Connected) then
-        FCon.Close;
+    //if (FCon.Connected) then
+    //    FCon.Close;
 
     FIdHTTP.Free;
-    FQuery.Free;
-    FCon.Free;
+    //FQuery.Free;
+    //FCon.Free;
 
     inherited;
 end;
 
-procedure TWorkerRequest.GarantirConexaoBD;
+{procedure TWorkerRequest.GarantirConexaoBD;
 begin
     if (not FCon.Connected) then
     begin
@@ -269,6 +304,65 @@ begin
 end;
 
 procedure TWorkerRequest.VerificarExpiracaoConexaoBD;
+begin
+    if FCon.Connected then
+    begin
+        if MinutesBetween(Now, FUltimoUsoBD) > 2 then
+        begin
+            try
+                FCon.Close;
+            except
+                on E: Exception do
+                begin
+                    GerarLog('Erro ao fechar conexão: ' + E.Message);
+                end;
+            end;
+        end;
+    end;
+end; }
+
+{ TWorkerBD }
+
+constructor TWorkerBD.Create;
+begin
+    inherited Create;
+    FCon := TFDConnection.Create(nil);
+    PreparaConexaoFirebird(FCon);
+
+    FQuery := TFDQuery.Create(nil);
+    FQuery.Connection := FCon;
+    FQuery.SQL.Text := 'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) ' +
+                       'values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
+end;
+
+destructor TWorkerBD.Destroy;
+begin
+    if (FCon.Connected) then
+        FCon.Close;
+
+    FQuery.Free;
+    FCon.Free;
+    inherited;
+end;
+
+procedure TWorkerBD.GarantirConexaoBD;
+begin
+    if (not FCon.Connected) then
+    begin
+        try
+            FCon.Open;
+        except
+            on E: Exception do
+            begin
+                GerarLog('Erro ao abrir conexão: ' + E.Message);
+            end;
+        end;
+    end;
+
+    FUltimoUsoBD := Now;
+end;
+
+procedure TWorkerBD.VerificarExpiracaoConexaoBD;
 begin
     if FCon.Connected then
     begin
@@ -430,6 +524,82 @@ begin
 end;
 
 function TFilaWorkerRequest.QtdeItens: Integer;
+var
+    liTotal, I: Integer;
+begin
+    liTotal := 0;
+    for I := 0 to FListaWorker.Count - 1 do
+        Inc(liTotal, FListaWorker[I].QtdeItens);
+
+    Result := liTotal;
+end;
+
+{ TFilaWorkerBD }
+
+constructor TFilaWorkerBD.Create;
+begin
+    inherited Create;
+    FListaWorker := TList<TWorkerBD>.Create;
+    FProcessamentoAtivo := False;
+end;
+
+destructor TFilaWorkerBD.Destroy;
+begin
+    Finalizar;
+    FListaWorker.Free;
+    inherited;
+end;
+
+procedure TFilaWorkerBD.EnfileirarTarefa(const ATarefa: TProc);
+var
+    lMenosCarregado: TWorkerBD;
+    liMenorFila: Integer;
+    lWorker: TWorkerBD;
+begin
+    liMenorFila := MaxInt;
+    lMenosCarregado := nil;
+
+    for lWorker in FListaWorker do
+    begin
+        if lWorker.QtdeItens < liMenorFila then
+        begin
+            liMenorFila := lWorker.QtdeItens;
+            lMenosCarregado := lWorker;
+        end;
+    end;
+
+    if Assigned(lMenosCarregado) then
+        lMenosCarregado.EnfileirarTarefa(ATarefa);
+end;
+
+procedure TFilaWorkerBD.Finalizar;
+var
+    lWorker: TWorkerBD;
+begin
+    FProcessamentoAtivo := False;
+
+    for lWorker in FListaWorker do
+        lWorker.Finalizar;
+
+    FListaWorker.Clear;
+end;
+
+procedure TFilaWorkerBD.Iniciar(const AQtdeWorkers: Integer);
+var
+    I: Integer;
+    lWorker: TWorkerBD;
+begin
+    if FProcessamentoAtivo then Exit;
+        FProcessamentoAtivo := True;
+
+    for I := 1 to AQtdeWorkers do
+    begin
+        lWorker := TWorkerBD.Create;
+        FListaWorker.Add(lWorker);
+    end;
+end;
+
+function TFilaWorkerBD.QtdeItens: Integer;
 var
     liTotal, I: Integer;
 begin

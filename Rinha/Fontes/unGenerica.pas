@@ -5,6 +5,8 @@ interface
 uses
     System.SysUtils, System.SyncObjs, System.IOUtils, System.DateUtils;
 
+    function GetObtendoLeitura: Boolean;
+    procedure SetObtendoLeitura(const AValue: Boolean);
     procedure CarregarVariaveisAmbiente;
     function GetEnv(const lsEnvVar, lsDefault: string): string;
     procedure GerarLog(lsMsg : String; lbQuebraLinhaConsole : Boolean = False);
@@ -30,8 +32,25 @@ var
     FNumMaxWorkersFila: Integer;
     FNumMaxWorkersProcesso: Integer;
     FTempoFila: Integer;
+    FObtendoLeitura: Integer;
 
 implementation
+
+procedure SetObtendoLeitura(const AValue: Boolean);
+begin
+    TInterlocked.Exchange(Integer(FObtendoLeitura), Ord(AValue));
+
+    {if (AValue) then
+    begin
+        SetUltimoBloqueio(Now);
+        GerarLog('Fila parada pelo sinal.');
+    end;}
+end;
+
+function GetObtendoLeitura: Boolean;
+begin
+    Result := FObtendoLeitura <> 0;
+end;
 
 function GetEnv(const lsEnvVar, lsDefault: string): string;
 begin

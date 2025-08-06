@@ -8,7 +8,7 @@ uses System.SysUtils, System.Classes, System.Json, System.DateUtils,
     FireDAC.DApt, FireDAC.Phys.FB, FireDAC.Phys.FBDef,
     FireDAC.Stan.Option, Data.DB, FireDAC.Stan.Intf, FireDAC.Stan.Param, FireDAC.Stan.Error,
     FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf, FireDAC.Comp.DataSet,
-    unGenerica, unRequisicaoPendente, unDBHelper, unLogHelper, unSchedulerHelper;
+    unGenerica, unRequisicaoPendente, unDBHelper, unLogHelper, unSchedulerHelper, unWorkerHelper;
 
 type
   TsmPagamentos = class(TDSServerModule)
@@ -39,7 +39,6 @@ begin
         ljObj := TJSONObject.ParseJSONValue(AJSON) as TJSONObject;
         correlationId := ljObj.GetValue('correlationId').Value;
         amount := StrToFloat(ljObj.GetValue('amount').Value);
-        requestedAt := DateToISO8601(Now, True);
     finally
         ljObj.Free;
     end;
@@ -47,6 +46,9 @@ begin
     ltReq := TRequisicaoPendente.Create(correlationId, amount, requestedAt);
 
     FilaLogger.LogEntrada(correlationId);
+
+    {while GetObtendoLeitura do
+        Sleep(1);   }
 
     AdicionarWorker(ltReq);
 
@@ -89,6 +91,11 @@ begin
             if ATo <> '' then
                 lQuery.ParamByName('to').AsDateTime := ISO8601ToDate(ATo);
 
+            {SetObtendoLeitura(True);
+
+            while FilaWorkerBD.QtdeItens > 0 do
+                Sleep(1); }
+
             lQuery.Open;
 
             TotalDefault := 0;
@@ -121,6 +128,8 @@ begin
                 ', "totalAmount": ' + FormatFloat('0.00', AmountDefault, lFS) + ' }, ' +
                 '"fallback": { "totalRequests": ' + IntToStr(TotalFallback) +
                 ', "totalAmount": ' + FormatFloat('0.00', AmountFallback, lFS) + ' } }';
+
+            //SetObtendoLeitura(False);
         except
             on E : Exception do
             begin
