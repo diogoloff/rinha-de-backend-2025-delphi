@@ -92,6 +92,7 @@ begin
     except
     end;
 
+    SetObtendoLeitura(False);
     IniciarWorkers;
     IniciarHealthCk;
     IniciarScheduled;

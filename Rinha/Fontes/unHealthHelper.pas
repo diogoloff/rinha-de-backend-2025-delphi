@@ -22,7 +22,7 @@ type
         FHealthURL: string;
         FMonitoramentoAtivo: Boolean;
         FIdHTTP: TIdHTTP;
-        //FFilaCongestionada: Integer;
+        FFilaCongestionada: Integer;
         //FUltimoBloqueio: TDateTime;
         //FQtdeMaxRetencao: Integer;
         FThreadMonitorar: TThread;
@@ -41,11 +41,11 @@ type
         function GetDefaultAtivo: Boolean;
         function GetTempoMinimoResposta: Integer;
         function GetTempoMaximoRespostaPadrao: Integer;
-        //function GetFilaCongestionada: Boolean;
+        function GetFilaCongestionada: Boolean;
         //function GetUltimoBloqueio: TDateTime;
         procedure SetDefaultAtivo(const AValue: Boolean);
         procedure SetTempoMinimoResposta(const AValue: Integer);
-        //procedure SetFilaCongestionada(const AValue: Boolean);
+        procedure SetFilaCongestionada(const AValue: Boolean);
         //procedure SetUltimoBloqueio(const AValue: TDateTime);
         //function DeveSairDaContencao: Boolean;
     end;
@@ -65,6 +65,7 @@ begin
     FEventoVerificar := TEvent.Create(nil, False, False, '');
     FMonitorLock := TCriticalSection.Create;
     FDefaultAtivo := 1;
+    FFilaCongestionada := 0;
     FTempoMinimoResposta := AResTimeOut;
     FTempoMinimoRespostaPadrao := AResTimeOut;
     FTempoMaximoRespostaPadrao := AResTimeOut * 2;
@@ -193,11 +194,11 @@ begin
 end;
 
 procedure TServiceHealthMonitor.ThreadMonitorar;
-var
-    lbPrimeiro: Boolean;
-    lEstadoEvento: TWaitResult;
+//var
+//    lbPrimeiro: Boolean;
+//    lEstadoEvento: TWaitResult;
 begin
-    lbPrimeiro := True;
+    //lbPrimeiro := True;
     while FMonitoramentoAtivo do
     begin
         // Aguarda até ser sinalizado que precisa verificar o status do serviço
@@ -243,15 +244,15 @@ begin
     end;
 end;
 
-{procedure TServiceHealthMonitor.SetFilaCongestionada(const AValue: Boolean);
+procedure TServiceHealthMonitor.SetFilaCongestionada(const AValue: Boolean);
 begin
     TInterlocked.Exchange(Integer(FFilaCongestionada), Ord(AValue));
 
-    if (AValue) then
+    {if (AValue) then
     begin
         SetUltimoBloqueio(Now);
         GerarLog('Fila parada pelo sinal.');
-    end;
+    end;}
 end;
 
 function TServiceHealthMonitor.GetFilaCongestionada: Boolean;
@@ -259,7 +260,7 @@ begin
     Result := FFilaCongestionada <> 0;
 end;
 
-procedure TServiceHealthMonitor.SetUltimoBloqueio(const AValue: TDateTime);
+{procedure TServiceHealthMonitor.SetUltimoBloqueio(const AValue: TDateTime);
 begin
     FMonitorLock.Enter;
     try
