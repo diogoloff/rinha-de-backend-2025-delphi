@@ -44,13 +44,8 @@ begin
     end;
 
     ltReq := TRequisicaoPendente.Create(correlationId, amount, requestedAt);
-
     FilaLogger.LogEntrada(correlationId);
-
-    {while GetObtendoLeitura do
-        Sleep(1);   }
-
-    AdicionarWorker(ltReq);
+    AdicionarWorkerProcessamento(ltReq);
 
     Result := '';
 end;
@@ -91,11 +86,6 @@ begin
             if ATo <> '' then
                 lQuery.ParamByName('to').AsDateTime := ISO8601ToDate(ATo);
 
-            {SetObtendoLeitura(True);
-
-            while FilaWorkerBD.QtdeItens > 0 do
-                Sleep(1); }
-
             lQuery.Open;
 
             TotalDefault := 0;
@@ -128,8 +118,6 @@ begin
                 ', "totalAmount": ' + FormatFloat('0.00', AmountDefault, lFS) + ' }, ' +
                 '"fallback": { "totalRequests": ' + IntToStr(TotalFallback) +
                 ', "totalAmount": ' + FormatFloat('0.00', AmountFallback, lFS) + ' } }';
-
-            //SetObtendoLeitura(False);
         except
             on E : Exception do
             begin

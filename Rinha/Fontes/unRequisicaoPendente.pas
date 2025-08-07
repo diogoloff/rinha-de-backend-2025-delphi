@@ -28,7 +28,7 @@ begin
     amount := AAmount;
     requestedAt := ARequestedAt;
     error := False;
-    attempt := 0;
+    attempt := 1;
     createAt := Now;
     executeAt := Now;
 end;

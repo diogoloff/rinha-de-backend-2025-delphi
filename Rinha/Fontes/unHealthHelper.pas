@@ -6,7 +6,7 @@ interface
 
 uses
     System.Classes, System.SysUtils, System.SyncObjs, System.JSON, System.DateUtils,
-    IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP,
+    System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent, System.NetConsts,
     unGenerica, unWorkerHelper, System.Generics.Collections, System.Math;
 
 type
@@ -21,7 +21,7 @@ type
         FUltimaVerificacao: TDateTime;
         FHealthURL: string;
         FMonitoramentoAtivo: Boolean;
-        FIdHTTP: TIdHTTP;
+        FHTTPClient: THTTPClient;
         FFilaCongestionada: Integer;
         //FUltimoBloqueio: TDateTime;
         //FQtdeMaxRetencao: Integer;
@@ -72,10 +72,11 @@ begin
     FUltimaVerificacao := IncSecond(Now, -6);
     FHealthURL := AHealthURL;
 
-    FIdHTTP := TIdHTTP.Create(nil);
-    FIdHTTP.ConnectTimeout := AConTimeOut;
-    FIdHTTP.ReadTimeout := AReadTimeOut;
-    FIdHTTP.Request.ContentType := 'application/json';
+    FHTTPClient := THTTPClient.Create;
+    FHTTPClient.ConnectionTimeout := FConTimeOut;
+    FHTTPClient.ResponseTimeout := FReadTimeOut;
+    FHTTPClient.ContentType := 'application/json';
+    FHTTPClient.CustomHeaders['Connection'] := 'keep-alive';
 
     FMonitoramentoAtivo := True;
 end;
@@ -86,7 +87,7 @@ begin
 
     FEventoVerificar.Free;
     FMonitorLock.Free;
-    FIdHTTP.Free;
+    FHTTPClient.Free;
     inherited;
 end;
 
@@ -96,20 +97,31 @@ var
     ljResposta: TJSONObject;
     failing: Boolean;
     minResponseTime: Integer;
+    lResponse: IHTTPResponse;
 
     procedure TestaServico;
     begin
-        lsResposta := FIdHTTP.Get(FHealthURL + '/payments/service-health');
-        ljResposta := TJSONObject.ParseJSONValue(lsResposta) as TJSONObject;
+        lResponse := FHTTPClient.Get(FHealthURL + '/payments/service-health');
 
-        if Assigned(ljResposta) then
+        if (lResponse.StatusCode = 200) then
         begin
-            failing := ljResposta.GetValue('failing').Value = 'true';
-            minResponseTime := StrToInt(ljResposta.GetValue('minResponseTime').Value);
-            ljResposta.Free;
-        end;
+            lsResposta := lResponse.ContentAsString;
 
-        GerarLog('Teste Serviço: F' + BoolToStr(failing, True) + ' T' + IntToStr(minResponseTime));
+            ljResposta := TJSONObject.ParseJSONValue(lsResposta) as TJSONObject;
+            try
+                if Assigned(ljResposta) then
+                begin
+                    failing := ljResposta.GetValue('failing').Value = 'true';
+                    minResponseTime := StrToInt(ljResposta.GetValue('minResponseTime').Value);
+                end;
+            finally
+                ljResposta.Free;
+            end;
+
+            GerarLog('Teste Serviço: F' + BoolToStr(failing, True) + ' T' + IntToStr(minResponseTime));
+        end
+        else
+            GerarLog('Teste Serviço - Erro: ' + IntToStr(lResponse.StatusCode));
     end;
 begin
     failing := False;
@@ -135,8 +147,6 @@ begin
         if (minResponseTime > FTempoMaximoRespostaPadrao) then
             minResponseTime := FTempoMaximoRespostaPadrao;
     end;
-
-    FIdHTTP.ReadTimeout := minResponseTime;
 
     SetDefaultAtivo(not failing);
     SetTempoMinimoResposta(minResponseTime)

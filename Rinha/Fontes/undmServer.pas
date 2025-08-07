@@ -92,7 +92,6 @@ begin
     except
     end;
 
-    SetObtendoLeitura(False);
     IniciarWorkers;
     IniciarHealthCk;
     IniciarScheduled;
@@ -122,19 +121,19 @@ end;
 procedure ExcluirRegistros;
 var
     lCon: TFDConnection;
-    QyPagto: TFDQuery;
+    lQuery: TFDQuery;
 begin
     lCon := CriarConexaoFirebird;
-    QyPagto := TFDQuery.Create(nil);
+    lQuery := TFDQuery.Create(nil);
     try
-        QyPagto.Connection := lCon;
+        lQuery.Connection := lCon;
 
-        QyPagto.SQL.Text :=
+        lQuery.SQL.Text :=
             'delete from PAYMENTS';
 
         try
             lCon.StartTransaction;
-            QyPagto.ExecSQL;
+            lQuery.ExecSQL;
             lCon.Commit;
         except
             on E : Exception do
@@ -144,7 +143,7 @@ begin
             end;
         end;
     finally
-        QyPagto.Free;
+        lQuery.Free;
         DestruirConexaoFirebird(lCon);
     end;
 end;

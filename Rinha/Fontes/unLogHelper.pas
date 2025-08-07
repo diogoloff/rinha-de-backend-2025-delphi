@@ -119,5 +119,6 @@ initialization
 
 finalization
     FilaLogger.GerarRelatorioFinal;
+    FilaLogger.Free;
 
 end.

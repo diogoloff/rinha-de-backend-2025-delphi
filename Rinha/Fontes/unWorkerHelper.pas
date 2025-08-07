@@ -4,12 +4,10 @@ interface
 
 uses
     System.SysUtils, System.Classes, System.SyncObjs, System.Generics.Collections, System.DateUtils,
-    IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP,
-
+    System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent, System.NetConsts,
     FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
     FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.ConsoleUI.Wait, Data.DB, FireDAC.Comp.Client,
     FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf, FireDAC.DApt, FireDAC.Comp.DataSet,
-
     unGenerica, unDBHelper;
 
 type
@@ -38,19 +36,12 @@ type
 
     TWorkerRequest = class(TWorkerBase)
     private
-        FIdHTTP: TIdHTTP;
-        //FCon: TFDConnection;
-        //FQuery: TFDQuery;
-        //FUltimoUsoBD: TDateTime;
+        FHTTPClient: THTTPClient;
     public
         constructor Create;
         destructor Destroy; override;
-        //procedure GarantirConexaoBD;
-        //procedure VerificarExpiracaoConexaoBD;
 
-        property IdHTTP: TIdHTTP read FIdHTTP;
-        //property Con: TFDConnection read FCon;
-        //property Query: TFDQuery read FQuery;
+        property HTTPClient: THTTPClient read FHTTPClient;
     end;
 
     TWorkerBD = class(TWorkerBase)
@@ -260,66 +251,19 @@ end;
 constructor TWorkerRequest.Create;
 begin
     inherited Create;
-    FIdHTTP := TIdHTTP.Create(nil);
-    FIdHTTP.ConnectTimeout := FConTimeOut;
-    FIdHTTP.ReadTimeout := FReadTimeOut;
-    FIdHTTP.Request.ContentType := 'application/json';
-
-    //FCon := TFDConnection.Create(nil);
-    //PreparaConexaoFirebird(FCon);
-
-    //FQuery := TFDQuery.Create(nil);
-    //FQuery.Connection := FCon;
-    //FQuery.SQL.Text := 'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) ' +
-    //                   'values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
+    FHTTPClient := THTTPClient.Create;
+    FHTTPClient.ConnectionTimeout := FConTimeOut;
+    FHTTPClient.ResponseTimeout := FReadTimeOut;
+    FHTTPClient.ContentType := 'application/json';
+    FHTTPClient.CustomHeaders['Connection'] := 'keep-alive';
 end;
 
 destructor TWorkerRequest.Destroy;
 begin
-    //if (FCon.Connected) then
-    //    FCon.Close;
-
-    FIdHTTP.Free;
-    //FQuery.Free;
-    //FCon.Free;
+    FHTTPClient.Free;
 
     inherited;
 end;
-
-{procedure TWorkerRequest.GarantirConexaoBD;
-begin
-    if (not FCon.Connected) then
-    begin
-        try
-            FCon.Open;
-        except
-            on E: Exception do
-            begin
-                GerarLog('Erro ao abrir conexão: ' + E.Message);
-            end;
-        end;
-    end;
-
-    FUltimoUsoBD := Now;
-end;
-
-procedure TWorkerRequest.VerificarExpiracaoConexaoBD;
-begin
-    if FCon.Connected then
-    begin
-        if MinutesBetween(Now, FUltimoUsoBD) > 2 then
-        begin
-            try
-                FCon.Close;
-            except
-                on E: Exception do
-                begin
-                    GerarLog('Erro ao fechar conexão: ' + E.Message);
-                end;
-            end;
-        end;
-    end;
-end; }
 
 { TWorkerBD }
 
@@ -425,7 +369,10 @@ begin
     FProcessamentoAtivo := False;
 
     for lWorker in FListaWorker do
+    begin
         lWorker.Finalizar;
+        lWorker.Free;
+    end;
 
     FListaWorker.Clear;
 end;
@@ -503,7 +450,10 @@ begin
     FProcessamentoAtivo := False;
 
     for lWorker in FListaWorker do
+    begin
         lWorker.Finalizar;
+        lWorker.Free;
+    end;
 
     FListaWorker.Clear;
 end;
@@ -579,7 +529,10 @@ begin
     FProcessamentoAtivo := False;
 
     for lWorker in FListaWorker do
+    begin
         lWorker.Finalizar;
+        lWorker.Free;
+    end;
 
     FListaWorker.Clear;
 end;
