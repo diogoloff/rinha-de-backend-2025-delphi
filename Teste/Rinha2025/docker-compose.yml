@@ -14,12 +14,10 @@ services:
       - DB_PASS=masterkey
       - DB_HOST=firebird
       - DB_PORT=3050
-      - CON_TIME_OUT=5000
-      - READ_TIME_OUT=3000
-      - RES_TIME_OUT=1000
       - NUM_WORKERS_FILA=24
-      - NUM_WORKERS_PROCESSO=48
-      - TEMPO_FILA=500
+      - NUM_WORKERS_PROCESSO=24
+      - NUM_TENTATIVAS_DEFAULT=3
+      - TEMPO_FILA=1000
       - DEBUG=N
     volumes:
       - ./Logs/:/opt/rinha/Logs/
