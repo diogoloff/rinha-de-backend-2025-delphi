@@ -5,13 +5,10 @@ interface
 uses
     System.SysUtils, System.Classes, System.DateUtils, System.Generics.Collections, System.SyncObjs,
     System.JSON, System.IOUtils, System.Math, Data.SqlTimSt, Data.FmtBcd,
-
-    IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP,
-
+    System.Net.HttpClient,
     FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
     FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.ConsoleUI.Wait, Data.DB, FireDAC.Comp.Client,
     FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf, FireDAC.DApt, FireDAC.Comp.DataSet,
-
     unGenerica, unRequisicaoPendente, unHealthHelper, unLogHelper, unDBHelper, unWorkerHelper;
 
 type
@@ -23,32 +20,40 @@ type
     procedure IniciarScheduled;
     procedure FinalizarScheduled;
 
-    procedure AdicionarWorker(const AReq : TRequisicaoPendente);
+    //procedure AdicionarWorker(const AReq : TRequisicaoPendente);
     procedure AdicionarWorkerProcessamento(const AReq : TRequisicaoPendente);
+    procedure AdicionarWorkerReprocesso(const AReq : TRequisicaoPendente);
     procedure AdicionarWorkerBD(const AReq : TRequisicaoPendente; const ADefaultProcessor: Boolean);
     procedure ProcessarRequisicao(const AReq: TRequisicaoPendente);
-    procedure AgendarProcesso(const AReq: TRequisicaoPendente);
+    procedure Agendar(const AReq: TRequisicaoPendente);
 
 var
-    ListaAgendamentos: TThreadList<TScheduledTask>;
+    ListaDeAgendamentos: TThreadList<TScheduledTask>;
     RodarAgendamentos: TWorker;
 
 implementation
 
-function EnviarParaProcessar(AReq: TRequisicaoPendente; const ADefaultProcessor: Boolean): Boolean;
+function EnviarParaProcessar(const AReq: TRequisicaoPendente; const ADefaultProcessor: Boolean): Boolean;
 var
     ljEnviar: TJSONObject;
     lsURL : String;
     lStream: TStringStream;
-    //liTempoMinimoResposta: Integer;
+    lResponse: IHTTPResponse;
+
+    lCon: TFDConnection;
+    lQuery: TFDQuery;
+    lReq: TRequisicaoPendente;
 begin
     Result := False;
-    //liTempoMinimoResposta := ServiceHealthMonitor.GetTempoMinimoResposta;
-    //IdHTTPPagamentos.ReadTimeout := liTempoMinimoResposta;
+
+    lReq := AReq;
 
     lsURL := FUrl + '/payments';
     if (not ADefaultProcessor) then
         lsURL := FUrlFall + '/payments';
+
+    lCon := CriarConexaoFirebird;
+    lQuery := TFDQuery.Create(nil);
 
     ljEnviar := TJSONObject.Create;
     lStream  := nil;
@@ -56,58 +61,64 @@ begin
         with TWorkerRequest(TThread.CurrentThread) do
         begin
             try
-                {GarantirConexaoBD;
+                lQuery.Connection := lCon;
+                lQuery.SQL.Text := 'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) ' +
+                                   'values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
 
-                with AReq do
+                lReq.requestedAt := DateToISO8601(Now, True);
+
+                //GarantirConexaoBD;
+
+                with lReq do
                 begin
-                    requestedAt := DateToISO8601(Now, True);
-
-                    Query.ParamByName('CORRELATION_ID').AsString := correlationId;
-                    Query.ParamByName('AMOUNT').AsFMTBCD := amount;
+                    lQuery.ParamByName('CORRELATION_ID').AsString := correlationId;
+                    lQuery.ParamByName('AMOUNT').AsFMTBCD := amount;
 
                     if (error) then
-                        Query.ParamByName('STATUS').AsString := 'error'
+                        lQuery.ParamByName('STATUS').AsString := 'error'
                     else
-                        Query.ParamByName('STATUS').AsString := 'success';
+                        lQuery.ParamByName('STATUS').AsString := 'success';
 
                     if (ADefaultProcessor) then
-                        Query.ParamByName('PROCESSOR').AsString := 'default'
+                        lQuery.ParamByName('PROCESSOR').AsString := 'default'
                     else
-                        Query.ParamByName('PROCESSOR').AsString := 'fallback';
+                        lQuery.ParamByName('PROCESSOR').AsString := 'fallback';
 
-                    Query.ParamByName('CREATED_AT').AsSQLTimeStamp := DateTimeToSQLTimeStamp(ISO8601ToDate(requestedAt));
+                    lQuery.ParamByName('CREATED_AT').AsSQLTimeStamp := DateTimeToSQLTimeStamp(ISO8601ToDate(requestedAt));
+                end;
 
-                    if not Query.Prepared then
-                        Query.Prepare;
-                end; }
-
-                AReq.requestedAt := DateToISO8601(Now, True);
-                ljEnviar.AddPair('correlationId', AReq.correlationId);
-                ljEnviar.AddPair('amount', TJSONNumber.Create(AReq.amount));
-                ljEnviar.AddPair('requestedAt', AReq.requestedAt);
+                ljEnviar := TJSONObject.Create;
+                ljEnviar.AddPair('correlationId', lReq.correlationId);
+                ljEnviar.AddPair('amount', TJSONNumber.Create(lReq.amount));
+                ljEnviar.AddPair('requestedAt', lReq.requestedAt);
 
                 lStream := TStringStream.Create(ljEnviar.ToString, TEncoding.UTF8);
 
-                // Envia a requisição POST
-                IdHTTP.Post(lsURL, lStream);
-                AdicionarWorkerBD(AReq, ADefaultProcessor);
+                lResponse := HTTPClient.Post(lsURL, lStream, nil);
 
-                //Query.ExecSQL;
-                //Con.Commit;
+                if (lResponse.StatusCode = 200) then
+                begin
+                    lCon.StartTransaction;
+                    lQuery.ExecSQL;
+                    lCon.Commit;
 
-                FilaLogger.LogExecucao(AReq.correlationId, sfSalvo, 0);
-
-                // Talvez fazer o bloqueio intencional se timeout estiver muito alto, mesmo que esteja validando
-
-                Result := True;
-            except
-                on E: Exception do
+                    //AdicionarWorkerBD(lReq, ADefaultProcessor);
+                    Result := True;
+                end
+                else
                 begin
                     //if (Con.InTransaction) then
                     //    Con.Rollback;
-                    // Talvez fazer o bloqueio intencional para só voltar depois de um tempo se estiver dando muito erro
 
-                    //GerarLog('Erro Processar: ' + E.Message);
+                    GerarLog('Erro Processar: ' + IntToStr(lResponse.StatusCode));
+                end;
+            except
+                on E: Exception do
+                begin
+                    if (lCon.InTransaction) then
+                        lCon.Rollback;
+
+                    GerarLog('Erro Processar: ' + E.Message);
                 end;
             end;
         end;
@@ -116,49 +127,60 @@ begin
             lStream.Free;
 
         ljEnviar.Free;
+
+        lQuery.Free;
+        DestruirConexaoFirebird(lCon);
     end;
 end;
 
 procedure GravarRequisicao(const AReq: TRequisicaoPendente; const ADefaultProcessor: Boolean);
+var
+    lQuery: TFDQuery;
 begin
     with TWorkerBD(TThread.CurrentThread) do
     begin
+        lQuery := TFDQuery.Create(nil);
         try
             GarantirConexaoBD;
 
+            lQuery.Connection := Con;
+            lQuery.SQL.Text := 'insert into PAYMENTS (CORRELATION_ID, AMOUNT, STATUS, PROCESSOR, CREATED_AT) ' +
+                               'values (:CORRELATION_ID, :AMOUNT, :STATUS, :PROCESSOR, :CREATED_AT)';
+
             with AReq do
             begin
-                Query.ParamByName('CORRELATION_ID').AsString := correlationId;
-                Query.ParamByName('AMOUNT').AsFMTBCD := amount;
+                lQuery.ParamByName('CORRELATION_ID').AsString := correlationId;
+                lQuery.ParamByName('AMOUNT').AsFMTBCD := amount;
 
                 if (error) then
-                    Query.ParamByName('STATUS').AsString := 'error'
+                    lQuery.ParamByName('STATUS').AsString := 'error'
                 else
-                    Query.ParamByName('STATUS').AsString := 'success';
+                    lQuery.ParamByName('STATUS').AsString := 'success';
 
                 if (ADefaultProcessor) then
-                    Query.ParamByName('PROCESSOR').AsString := 'default'
+                    lQuery.ParamByName('PROCESSOR').AsString := 'default'
                 else
-                    Query.ParamByName('PROCESSOR').AsString := 'fallback';
+                    lQuery.ParamByName('PROCESSOR').AsString := 'fallback';
 
-                Query.ParamByName('CREATED_AT').AsSQLTimeStamp := DateTimeToSQLTimeStamp(ISO8601ToDate(requestedAt));
+                lQuery.ParamByName('CREATED_AT').AsSQLTimeStamp := DateTimeToSQLTimeStamp(ISO8601ToDate(requestedAt));
 
-                if not Query.Prepared then
-                    Query.Prepare;
+                Con.StartTransaction;
+                try
+                    lQuery.ExecSQL;
+                    Con.Commit;
+                    FilaLogger.LogExecucao(AReq.correlationId, sfSalvo, 0);
+                except
+                    on E: Exception do
+                    begin
+                        if Con.InTransaction then
+                            Con.Rollback;
 
-                Query.ExecSQL;
-                Con.Commit;
-
-                FilaLogger.LogExecucao(AReq.correlationId, sfSalvo, 0);
+                        GerarLog('Erro Gravar: ' + E.Message);
+                    end;
+                end;
             end;
-        except
-            on E : Exception do
-            begin
-                if (Con.InTransaction) then
-                    Con.Rollback;
-
-                GerarLog('Erro Gravar: ' + E.Message);
-            end;
+        finally
+            lQuery.Free;
         end;
     end;
 end;
@@ -167,65 +189,52 @@ procedure ProcessarRequisicao(const AReq: TRequisicaoPendente);
 var
     lbDefault: Boolean;
 begin
-    if not (TThread.CurrentThread is TWorkerRequest) then
-        raise Exception.Create('Thread atual não é um WorkerRequest');
-
-    //while GetObtendoLeitura do
-    //    Sleep(1);
-
     lbDefault := True;
-    if AReq.attempt > 5 then
+    if AReq.attempt > FNumTentativasDefault then
         lbDefault := ServiceHealthMonitor.GetDefaultAtivo;
 
-    //if AReq.attempt < 10 then
-    //begin
+    if AReq.attempt < 10 then
+    begin
         if (EnviarParaProcessar(AReq, lbDefault)) then
         begin
-            {if (AReq.attempt = 1) and ((not ServiceHealthMonitor.GetDefaultAtivo) or (ServiceHealthMonitor.GetFilaCongestionada)) then
+            if (AReq.attempt <= FNumTentativasDefault) and (not ServiceHealthMonitor.GetDefaultAtivo) then
             begin
-                GerarLog('Voltou Sozinho:');
-                ServiceHealthMonitor.SetFilaCongestionada(False);
-                ServiceHealthMonitor.SetDefaultAtivo(True);
-            end; }
-
-            if (AReq.attempt <= 5) and (not ServiceHealthMonitor.GetDefaultAtivo) then
-            begin
-                GerarLog('Voltou Sozinho:');
+                GerarLog('Voltou Sozinho');
                 ServiceHealthMonitor.SetDefaultAtivo(True);
             end;
 
-            //GravarRequisicao(AReq, lbDefault);
-            Exit
+            Exit;
         end;
 
-        //if (AReq.attempt > 5) then
-        //    ServiceHealthMonitor.SetFilaCongestionada(True);
-
         ServiceHealthMonitor.VerificarSinal;
-        AdicionarWorker(AReq);
-    {end
+
+        AdicionarWorkerReprocesso(AReq);
+    end
     else
     begin
         GerarLog('Transação Perdida: ' + AReq.correlationId);
         FilaLogger.LogExecucao(AReq.correlationId, sfDescartado, 0);
-    end; }
+    end;
+
+
+    ServiceHealthMonitor.VerificarSinal;
 end;
 
-procedure AdicionarWorker(const AReq : TRequisicaoPendente);
+{procedure AdicionarWorker(const AReq : TRequisicaoPendente);
 begin
     FilaWorkerManager.EnfileirarTarefa(
     procedure
     begin
-        AgendarProcesso(AReq);
+        Agendar(AReq);
     end);
-end;
+end;   }
 
-procedure AdicionarWorkerBD(const AReq : TRequisicaoPendente; const ADefaultProcessor: Boolean);
+procedure AdicionarWorkerReprocesso(const AReq : TRequisicaoPendente);
 begin
-    FilaWorkerBD.EnfileirarTarefa(
+    FilaWorkerManager.EnfileirarTarefa(
     procedure
     begin
-        GravarRequisicao(AReq, ADefaultProcessor);
+        Agendar(AReq);
     end);
 end;
 
@@ -238,6 +247,15 @@ begin
     end);
 end;
 
+procedure AdicionarWorkerBD(const AReq : TRequisicaoPendente; const ADefaultProcessor: Boolean);
+begin
+    FilaWorkerBD.EnfileirarTarefa(
+    procedure
+    begin
+        GravarRequisicao(AReq, ADefaultProcessor);
+    end);
+end;
+
 function CalcularTempoAdaptativo(const AReq: TRequisicaoPendente): Integer;
 begin
     // Tempo base ajustável conforme numero de tentativas
@@ -247,56 +265,75 @@ begin
         Result := 4 + Trunc(Power(AReq.attempt - 5, 1.5));
 end;
 
-procedure AgendarProcesso(const AReq: TRequisicaoPendente);
+procedure Agendar(const AReq: TRequisicaoPendente);
 var
     lLista: TList<TScheduledTask>;
     lTask: TScheduledTask;
 begin
+    FilaLogger.LogEntrada(AReq.correlationId);
+
     if (AReq.attempt = 0) then
         lTask.ExecuteAt := Now
     else
-        lTask.ExecuteAt := IncMilliSecond(Now, CalcularTempoAdaptativo(AReq));
+        lTask.ExecuteAt := IncSecond(Now, CalcularTempoAdaptativo(AReq));
 
     lTask.AReq := AReq;
     Inc(lTask.AReq.attempt);
 
-    lLista := ListaAgendamentos.LockList;
+    lLista := ListaDeAgendamentos.LockList;
     try
         lLista.Add(lTask);
     finally
-        ListaAgendamentos.UnlockList;
+        ListaDeAgendamentos.UnlockList;
     end;
 end;
 
-procedure ExecutarAgendamentos(const AReprocesso: Boolean);
+procedure ExecutarAgendamentos;
 var
     lLista: TList<TScheduledTask>;
+    lListaProcessar: TList<TScheduledTask>;
+    lListaReagendar: TList<TScheduledTask>;
     I: Integer;
 begin
-    lLista := ListaAgendamentos.LockList;
+    lListaProcessar := TList<TScheduledTask>.Create;
+    lListaReagendar := TList<TScheduledTask>.Create;
     try
-        for I := lLista.Count - 1 downto 0 do
-        begin
-            {if (lLista[I].AReq.attempt > 1) then
-            begin
-                if (ServiceHealthMonitor.GetFilaCongestionada) then
-                    Continue;
-            end;  }
+        lLista := ListaDeAgendamentos.LockList;
+        try
+            lListaProcessar.AddRange(lLista);
+            lLista.Clear;
+        finally
+            ListaDeAgendamentos.UnlockList;
+        end;
 
-            if Now >= lLista[I].ExecuteAt then
-            begin
-                AdicionarWorkerProcessamento(lLista[I].AReq);
-                lLista.Delete(I);
+        for I := 0 to lListaProcessar.Count - 1 do
+        begin
+            try
+                if Now >= lListaProcessar[I].ExecuteAt then
+                    AdicionarWorkerProcessamento(lListaProcessar[I].AReq)
+                else
+                    lListaReagendar.Add(lListaProcessar[I]);
+            except
+                on E: Exception do
+                    GerarLog('Erro reprocessamento: ' + E.Message);
             end;
         end;
+
+        lLista := ListaDeAgendamentos.LockList;
+        try
+            lLista.AddRange(lListaReagendar);
+        finally
+            ListaDeAgendamentos.UnlockList;
+        end;
     finally
-        ListaAgendamentos.UnlockList;
+        lListaProcessar.Free;
+        lListaReagendar.Free;
     end;
 end;
 
 procedure IniciarScheduled;
 begin
-    ListaAgendamentos := TThreadList<TScheduledTask>.Create;
+    ListaDeAgendamentos := TThreadList<TScheduledTask>.Create;
 
     RodarAgendamentos := TWorker.Create;
     RodarAgendamentos.SetarTarefa(
@@ -304,7 +341,7 @@ begin
     begin
         while not TThread.CurrentThread.CheckTerminated do
         begin
-            ExecutarAgendamentos(False);
+            ExecutarAgendamentos;
             Sleep(FTempoFila);
         end;
     end);
@@ -319,7 +356,7 @@ begin
         RodarAgendamentos.Free;
     end;
 
-    ListaAgendamentos.Free;
+    ListaDeAgendamentos.Free;
 end;
 
 end.

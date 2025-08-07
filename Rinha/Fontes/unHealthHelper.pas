@@ -326,7 +326,7 @@ procedure IniciarHealthCk;
 begin
     ServiceHealthMonitor := TServiceHealthMonitor.Create(FUrl, FConTimeOut, FReadTimeOut, FResTimeOut);
     ServiceHealthMonitor.Iniciar;
-    //ServiceHealthMonitor.VerificarSinal;
+    ServiceHealthMonitor.VerificarSinal;
 end;
 
 procedure FinalizarHealthCk;

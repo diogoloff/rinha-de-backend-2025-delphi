@@ -20,12 +20,12 @@ begin
     //ACon.DriverName := 'FB';
     ACon.ConnectionDefName := 'RINHA';
     ACon.LoginPrompt := False;
-    ACon.TxOptions.AutoCommit := True;
+    ACon.TxOptions.AutoCommit := False;
     ACon.TxOptions.AutoStop := False;
-    //ACon.TxOptions.DisconnectAction := xdRollback;
+    ACon.TxOptions.DisconnectAction := xdRollback;
     ACon.UpdateOptions.UpdateMode := upWhereKeyOnly;
     ACon.UpdateOptions.LockMode := lmPessimistic;
-    //ACon.ResourceOptions.KeepConnection := False;
+    ACon.ResourceOptions.KeepConnection := False;
 end;
 
 function CriarConexaoFirebird: TFDConnection;
@@ -56,7 +56,7 @@ begin
     begin
         Add('Pooled=True');
         Add('POOL_MaximumItems=500');
-        //Add('POOL_CleanupTimeout=5');  // Removido pois a desconexão agora esta sendo manual
+        Add('POOL_CleanupTimeout=5');  // Removido pois a desconexão agora esta sendo manual
         Add('ReadConsistency=True');
         Add('Database=/var/lib/firebird/data/' + GetEnv('DB_NAME', 'banco.fdb'));
         Add('User_Name=' + GetEnv('DB_USER', 'SYSDBA'));
