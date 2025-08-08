@@ -1,0 +1,20 @@
+2025-08-07T23:52:27Z:- Starting HTTP Server on port 8080
+2025-08-07T23:52:27Z:Configuração do Ambiente
+2025-08-07T23:52:27Z:==================================
+2025-08-07T23:52:27Z:(DEBUG) Debug Ativo: True
+2025-08-07T23:52:27Z:(DEFAULT_URL) Url Default: http://payment-processor-default:8080
+2025-08-07T23:52:27Z:(FALLBACK_URL) Url Fallback: http://payment-processor-fallback:8080
+2025-08-07T23:52:27Z:(CON_TIME_OUT) Timeout Conexão: 2500
+2025-08-07T23:52:27Z:(READ_TIME_OUT) Timeout Retorno Health: 5000
+2025-08-07T23:52:27Z:(RES_TIME_OUT) Timeout Padrão Processamento: 100
+2025-08-07T23:52:27Z:(NUM_WORKERS) Quantidade de Workers: 16
+2025-08-07T23:52:27Z:(TEMPO_FILA) Tempo Descarga de Fila: 1000
+2025-08-07T23:52:27Z:(NUM_TENTATIVAS_DEFAULT) Numero de Tentativas Default: 3
+2025-08-07T23:52:27Z:->
+2025-08-07T23:53:33Z:Teste Serviço: FTrue T100
+2025-08-07T23:53:40Z:Erro Servico  - C:2500 - R:5000 - RES:100 - Monitorar: http://payment-processor-default:8080 - Error 28 accessing to http://payment-processor-default:8080/payments/service-health: Operation timed out after 7503 milliseconds with 0 bytes received
+2025-08-07T23:53:48Z:Erro Servico  - C:2500 - R:5000 - RES:100 - Monitorar: http://payment-processor-default:8080 - Error 28 accessing to http://payment-processor-default:8080/payments/service-health: Operation timed out after 7502 milliseconds with 0 bytes received
+2025-08-07T23:53:53Z:Teste Serviço: FFalse T20
+2025-08-07T23:55:47Z:- Stopping Server
+2025-08-07T23:55:47Z:- Server Stopped
+2025-08-07T23:55:47Z:->

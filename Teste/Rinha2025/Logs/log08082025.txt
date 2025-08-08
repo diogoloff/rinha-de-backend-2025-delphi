@@ -1,0 +1,84 @@
+2025-08-08T00:59:27Z:- Starting HTTP Server on port 8080
+2025-08-08T00:59:27Z:Configuração do Ambiente
+2025-08-08T00:59:27Z:==================================
+2025-08-08T00:59:27Z:(DEBUG) Debug Ativo: True
+2025-08-08T00:59:27Z:(DEFAULT_URL) Url Default: http://payment-processor-default:8080
+2025-08-08T00:59:27Z:(FALLBACK_URL) Url Fallback: http://payment-processor-fallback:8080
+2025-08-08T00:59:27Z:(CON_TIME_OUT) Timeout Conexão: 2500
+2025-08-08T00:59:27Z:(READ_TIME_OUT) Timeout Retorno Health: 3000
+2025-08-08T00:59:27Z:(RES_TIME_OUT) Timeout Padrão Processamento: 100
+2025-08-08T00:59:27Z:(NUM_WORKERS) Quantidade de Workers: 24
+2025-08-08T00:59:27Z:(TEMPO_FILA) Tempo Descarga de Fila: 1000
+2025-08-08T00:59:27Z:(NUM_TENTATIVAS_DEFAULT) Numero de Tentativas Default: 3
+2025-08-08T00:59:27Z:->
+2025-08-08T01:00:04Z:Field 'service' not found
+2025-08-08T01:00:04Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:05Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:00:06Z:Field 'service' not found
+2025-08-08T01:01:57Z:- Stopping Server
+2025-08-08T01:01:57Z:- Server Stopped
+2025-08-08T01:01:57Z:->
